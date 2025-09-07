@@ -113,7 +113,21 @@ FIELD(FCSR0, CAUSE, 24, 5)
 #define  EXCCODE_WPEM                EXCODE(19, 1)
 #define  EXCCODE_BTD                 EXCODE(20, 0)
 #define  EXCCODE_BTE                 EXCODE(21, 0)
+#define  EXCCODE_HVC                 EXCODE(22, 0) /* Hypervisor call */
 #define  EXCCODE_DBP                 EXCODE(26, 0) /* Reserved subcode used for debug */
+
+/* VM exit reason codes for LVZ */
+#define  VMEXIT_MMIO                 1  /* MMIO access */
+#define  VMEXIT_INT                  2  /* Interrupt */
+#define  VMEXIT_TIMER                3  /* Timer */
+#define  VMEXIT_IOCSR                4  /* IOCSR access */
+#define  VMEXIT_CSRR                 5  /* CSR read */
+#define  VMEXIT_CSRW                 6  /* CSR write */
+#define  VMEXIT_CSRX                 7  /* CSR exchange */
+#define  VMEXIT_HYPERCALL            8  /* Hypercall */
+#define  VMEXIT_CPUCFG               9  /* CPUCFG */
+#define  VMEXIT_TLB                  10 /* TLB operation */
+#define  VMEXIT_CACHE                11 /* Cache operation */
 
 /* cpucfg[0] bits */
 FIELD(CPUCFG0, PRID, 0, 32)
@@ -250,6 +264,7 @@ FIELD(TLB_MISC, E, 0, 1)
 FIELD(TLB_MISC, ASID, 1, 10)
 FIELD(TLB_MISC, VPPN, 13, 35)
 FIELD(TLB_MISC, PS, 48, 6)
+FIELD(TLB_MISC, GID, 54, 8)
 
 #define LSX_LEN    (128)
 #define LASX_LEN   (256)
@@ -346,6 +361,68 @@ typedef struct CPUArchState {
     uint64_t CSR_DBG;
     uint64_t CSR_DERA;
     uint64_t CSR_DSAVE;
+
+    /* LVZ (LoongArch Virtualization) CSRs */
+    uint64_t CSR_GSTAT;         /* Guest status */
+    uint64_t CSR_GCFG;          /* Guest config */
+    uint64_t CSR_GINTC;         /* Guest interrupt config */
+    uint64_t CSR_GCNTC;         /* Guest counter compensation */
+
+    /* Guest CSR registers (GCSR) */
+    uint64_t GCSR_CRMD;
+    uint64_t GCSR_PRMD;
+    uint64_t GCSR_EUEN;
+    uint64_t GCSR_MISC;
+    uint64_t GCSR_ECFG;
+    uint64_t GCSR_ESTAT;
+    uint64_t GCSR_ERA;
+    uint64_t GCSR_BADV;
+    uint64_t GCSR_BADI;
+    uint64_t GCSR_EENTRY;
+    uint64_t GCSR_TLBIDX;
+    uint64_t GCSR_TLBEHI;
+    uint64_t GCSR_TLBELO0;
+    uint64_t GCSR_TLBELO1;
+    uint64_t GCSR_ASID;
+    uint64_t GCSR_PGDL;
+    uint64_t GCSR_PGDH;
+    uint64_t GCSR_PGD;
+    uint64_t GCSR_PWCL;
+    uint64_t GCSR_PWCH;
+    uint64_t GCSR_STLBPS;
+    uint64_t GCSR_RVACFG;
+    uint64_t GCSR_CPUID;
+    uint64_t GCSR_PRCFG1;
+    uint64_t GCSR_PRCFG2;
+    uint64_t GCSR_PRCFG3;
+    uint64_t GCSR_SAVE[16];
+    uint64_t GCSR_TID;
+    uint64_t GCSR_TCFG;
+    uint64_t GCSR_TVAL;
+    uint64_t GCSR_CNTC;
+    uint64_t GCSR_TICLR;
+    uint64_t GCSR_LLBCTL;
+    uint64_t GCSR_IMPCTL1;
+    uint64_t GCSR_IMPCTL2;
+    uint64_t GCSR_TLBRENTRY;
+    uint64_t GCSR_TLBRBADV;
+    uint64_t GCSR_TLBRERA;
+    uint64_t GCSR_TLBRSAVE;
+    uint64_t GCSR_TLBRELO0;
+    uint64_t GCSR_TLBRELO1;
+    uint64_t GCSR_TLBREHI;
+    uint64_t GCSR_TLBRPRMD;
+    uint64_t GCSR_MERRCTL;
+    uint64_t GCSR_MERRINFO1;
+    uint64_t GCSR_MERRINFO2;
+    uint64_t GCSR_MERRENTRY;
+    uint64_t GCSR_MERRERA;
+    uint64_t GCSR_MERRSAVE;
+    uint64_t GCSR_CTAG;
+    uint64_t GCSR_DMW[4];
+    uint64_t GCSR_DBG;
+    uint64_t GCSR_DERA;
+    uint64_t GCSR_DSAVE;
 
 #ifdef CONFIG_TCG
     float_status fp_status;
@@ -463,6 +540,22 @@ static inline void cpu_get_tb_cpu_state(CPULoongArchState *env, vaddr *pc,
 #include "exec/cpu-all.h"
 
 #define CPU_RESOLVING_TYPE TYPE_LOONGARCH_CPU
+
+/* LVZ (LoongArch Virtualization) helper functions */
+static inline bool is_guest_mode(CPULoongArchState *env)
+{
+    return FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, VM);
+}
+
+static inline bool has_lvz_capability(CPULoongArchState *env)
+{
+    return FIELD_EX32(env->cpucfg[2], CPUCFG2, LVZ);
+}
+
+static inline uint8_t get_guest_id(CPULoongArchState *env)
+{
+    return FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, GID);
+}
 
 void loongarch_cpu_post_init(Object *obj);
 

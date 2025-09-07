@@ -210,4 +210,104 @@ FIELD(CSR_DBG, ECODE, 16, 6)
 #define LOONGARCH_CSR_DERA           0x501 /* Debug era */
 #define LOONGARCH_CSR_DSAVE          0x502 /* Debug save */
 
+/* LVZ (LoongArch Virtualization) CSRs */
+/* Guest Status and Control CSRs */
+#define LOONGARCH_CSR_GSTAT          0x50 /* Guest status */
+FIELD(CSR_GSTAT, GID, 0, 8)      /* Guest ID */
+FIELD(CSR_GSTAT, GIDBIT, 8, 4)   /* Guest ID bits */
+FIELD(CSR_GSTAT, PVM, 16, 1)     /* Previous virtualization mode */
+FIELD(CSR_GSTAT, VM, 17, 1)      /* Virtualization mode */
+
+#define LOONGARCH_CSR_GCFG           0x51 /* Guest config */
+FIELD(CSR_GCFG, GCIP, 0, 1)      /* Guest counter in privileged mode */
+FIELD(CSR_GCFG, GCOP, 1, 1)      /* Guest counter in operating mode */
+FIELD(CSR_GCFG, MATP, 2, 2)      /* Memory access type for privileged mode */
+FIELD(CSR_GCFG, MATO, 4, 2)      /* Memory access type for operating mode */
+FIELD(CSR_GCFG, SITP, 6, 1)      /* Software interrupt in privileged mode */
+FIELD(CSR_GCFG, SITO, 7, 1)      /* Software interrupt in operating mode */
+FIELD(CSR_GCFG, TITP, 8, 1)      /* Timer interrupt in privileged mode */
+FIELD(CSR_GCFG, TITO, 9, 1)      /* Timer interrupt in operating mode */
+
+#define LOONGARCH_CSR_GINTC          0x52 /* Guest interrupt config */
+FIELD(CSR_GINTC, VIP, 0, 8)      /* Virtual interrupt pending */
+FIELD(CSR_GINTC, VIE, 8, 8)      /* Virtual interrupt enable */
+
+#define LOONGARCH_CSR_GCNTC          0x53 /* Guest counter compensation */
+
+/* Guest CSR (GCSR) registers - aliases for guest mode access */
+#define LOONGARCH_GCSR_CRMD          0x2000 /* Guest CRMD */
+#define LOONGARCH_GCSR_PRMD          0x2001 /* Guest PRMD */
+#define LOONGARCH_GCSR_EUEN          0x2002 /* Guest EUEN */
+#define LOONGARCH_GCSR_MISC          0x2003 /* Guest MISC */
+#define LOONGARCH_GCSR_ECFG          0x2004 /* Guest ECFG */
+#define LOONGARCH_GCSR_ESTAT         0x2005 /* Guest ESTAT */
+#define LOONGARCH_GCSR_ERA           0x2006 /* Guest ERA */
+#define LOONGARCH_GCSR_BADV          0x2007 /* Guest BADV */
+#define LOONGARCH_GCSR_BADI          0x2008 /* Guest BADI */
+#define LOONGARCH_GCSR_EENTRY        0x200c /* Guest EENTRY */
+
+/* Guest TLB related GCSRs */
+#define LOONGARCH_GCSR_TLBIDX        0x2010 /* Guest TLBIDX */
+#define LOONGARCH_GCSR_TLBEHI        0x2011 /* Guest TLBEHI */
+#define LOONGARCH_GCSR_TLBELO0       0x2012 /* Guest TLBELO0 */
+#define LOONGARCH_GCSR_TLBELO1       0x2013 /* Guest TLBELO1 */
+#define LOONGARCH_GCSR_ASID          0x2018 /* Guest ASID */
+#define LOONGARCH_GCSR_PGDL          0x2019 /* Guest PGDL */
+#define LOONGARCH_GCSR_PGDH          0x201a /* Guest PGDH */
+#define LOONGARCH_GCSR_PGD           0x201b /* Guest PGD */
+#define LOONGARCH_GCSR_PWCL          0x201c /* Guest PWCL */
+#define LOONGARCH_GCSR_PWCH          0x201d /* Guest PWCH */
+#define LOONGARCH_GCSR_STLBPS        0x201e /* Guest STLBPS */
+#define LOONGARCH_GCSR_RVACFG        0x201f /* Guest RVACFG */
+
+/* Guest Config GCSRs */
+#define LOONGARCH_GCSR_CPUID         0x2020 /* Guest CPUID */
+#define LOONGARCH_GCSR_PRCFG1        0x2021 /* Guest PRCFG1 */
+#define LOONGARCH_GCSR_PRCFG2        0x2022 /* Guest PRCFG2 */
+#define LOONGARCH_GCSR_PRCFG3        0x2023 /* Guest PRCFG3 */
+
+/* Guest Save registers */
+#define LOONGARCH_GCSR_SAVE(N)       (0x2030 + N) /* Guest SAVE(N) */
+
+/* Guest Timer GCSRs */
+#define LOONGARCH_GCSR_TID           0x2040 /* Guest TID */
+#define LOONGARCH_GCSR_TCFG          0x2041 /* Guest TCFG */
+#define LOONGARCH_GCSR_TVAL          0x2042 /* Guest TVAL */
+#define LOONGARCH_GCSR_CNTC          0x2043 /* Guest CNTC */
+#define LOONGARCH_GCSR_TICLR         0x2044 /* Guest TICLR */
+
+/* Guest LLBCTL GCSR */
+#define LOONGARCH_GCSR_LLBCTL        0x2060 /* Guest LLBCTL */
+
+/* Guest Implementation dependent GCSRs */
+#define LOONGARCH_GCSR_IMPCTL1       0x2080 /* Guest IMPCTL1 */
+#define LOONGARCH_GCSR_IMPCTL2       0x2081 /* Guest IMPCTL2 */
+
+/* Guest TLB Refill GCSRs */
+#define LOONGARCH_GCSR_TLBRENTRY     0x2088 /* Guest TLBRENTRY */
+#define LOONGARCH_GCSR_TLBRBADV      0x2089 /* Guest TLBRBADV */
+#define LOONGARCH_GCSR_TLBRERA       0x208a /* Guest TLBRERA */
+#define LOONGARCH_GCSR_TLBRSAVE      0x208b /* Guest TLBRSAVE */
+#define LOONGARCH_GCSR_TLBRELO0      0x208c /* Guest TLBRELO0 */
+#define LOONGARCH_GCSR_TLBRELO1      0x208d /* Guest TLBRELO1 */
+#define LOONGARCH_GCSR_TLBREHI       0x208e /* Guest TLBREHI */
+#define LOONGARCH_GCSR_TLBRPRMD      0x208f /* Guest TLBRPRMD */
+
+/* Guest Machine Error GCSRs */
+#define LOONGARCH_GCSR_MERRCTL       0x2090 /* Guest MERRCTL */
+#define LOONGARCH_GCSR_MERRINFO1     0x2091 /* Guest MERRINFO1 */
+#define LOONGARCH_GCSR_MERRINFO2     0x2092 /* Guest MERRINFO2 */
+#define LOONGARCH_GCSR_MERRENTRY     0x2093 /* Guest MERRENTRY */
+#define LOONGARCH_GCSR_MERRERA       0x2094 /* Guest MERRERA */
+#define LOONGARCH_GCSR_MERRSAVE      0x2095 /* Guest MERRSAVE */
+#define LOONGARCH_GCSR_CTAG          0x2098 /* Guest CTAG */
+
+/* Guest Direct map windows GCSRs */
+#define LOONGARCH_GCSR_DMW(N)        (0x2180 + N) /* Guest DMW(N) */
+
+/* Guest Debug GCSRs */
+#define LOONGARCH_GCSR_DBG           0x2500 /* Guest DBG */
+#define LOONGARCH_GCSR_DERA          0x2501 /* Guest DERA */
+#define LOONGARCH_GCSR_DSAVE         0x2502 /* Guest DSAVE */
+
 #endif /* LOONGARCH_CPU_CSR_H */

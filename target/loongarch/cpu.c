@@ -71,6 +71,7 @@ static const struct TypeExcp excp_names[] = {
     {EXCCODE_BCE, "Bound Check Exception"},
     {EXCCODE_SXD, "128 bit vector instructions Disable exception"},
     {EXCCODE_ASXD, "256 bit vector instructions Disable exception"},
+    {EXCCODE_HVC, "Hypervisor call"},
     {EXCP_HLT, "EXCP_HLT"},
 };
 
@@ -218,6 +219,17 @@ static void loongarch_cpu_do_interrupt(CPUState *cs)
     case EXCCODE_PNX:
     case EXCCODE_PPI:
         cause = cs->exception_index;
+        break;
+    case EXCCODE_HVC:
+        /* Hypervisor call exception */
+        if (is_guest_mode(env)) {
+            /* Guest mode HVC - exit to hypervisor */
+            env->CSR_BADV = env->pc;
+            cause = cs->exception_index;
+        } else {
+            /* Host mode HVC - treat as instruction non-existent */
+            cause = EXCCODE_INE;
+        }
         break;
     default:
         qemu_log("Error: exception(%d) has not been supported\n",
@@ -650,12 +662,41 @@ static void loongarch_set_lasx(Object *obj, bool value, Error **errp)
     }
 }
 
+static bool loongarch_get_lvz(Object *obj, Error **errp)
+{
+    LoongArchCPU *cpu = LOONGARCH_CPU(obj);
+    bool ret;
+
+    if (FIELD_EX32(cpu->env.cpucfg[2], CPUCFG2, LVZ)) {
+        ret = true;
+    } else {
+        ret = false;
+    }
+    return ret;
+}
+
+static void loongarch_set_lvz(Object *obj, bool value, Error **errp)
+{
+    LoongArchCPU *cpu = LOONGARCH_CPU(obj);
+
+    if (value) {
+        cpu->env.cpucfg[2] = FIELD_DP32(cpu->env.cpucfg[2], CPUCFG2, LVZ, 1);
+        /* Set LVZ version to 1 when enabling LVZ */
+        cpu->env.cpucfg[2] = FIELD_DP32(cpu->env.cpucfg[2], CPUCFG2, LVZ_VER, 1);
+    } else {
+        cpu->env.cpucfg[2] = FIELD_DP32(cpu->env.cpucfg[2], CPUCFG2, LVZ, 0);
+        cpu->env.cpucfg[2] = FIELD_DP32(cpu->env.cpucfg[2], CPUCFG2, LVZ_VER, 0);
+    }
+}
+
 void loongarch_cpu_post_init(Object *obj)
 {
     object_property_add_bool(obj, "lsx", loongarch_get_lsx,
                              loongarch_set_lsx);
     object_property_add_bool(obj, "lasx", loongarch_get_lasx,
                              loongarch_set_lasx);
+    object_property_add_bool(obj, "lvz", loongarch_get_lvz,
+                             loongarch_set_lvz);
 }
 
 static void loongarch_cpu_init(Object *obj)
