@@ -54,6 +54,8 @@ void cpu_loongarch_store_constant_timer_config(LoongArchCPU *cpu,
                                                uint64_t value);
 bool loongarch_tlb_search(CPULoongArchState *env, target_ulong vaddr,
                           int *index);
+int loongarch_tlb_search_guest(CPULoongArchState *env, target_ulong vaddr, 
+                              int *index);
 int get_physical_address(CPULoongArchState *env, hwaddr *physical,
                          int *prot, target_ulong address,
                          MMUAccessType access_type, int mmu_idx);
@@ -63,6 +65,9 @@ hwaddr loongarch_cpu_get_phys_page_debug(CPUState *cpu, vaddr addr);
 bool loongarch_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
                             MMUAccessType access_type, int mmu_idx,
                             bool probe, uintptr_t retaddr);
+bool loongarch_cpu_tlb_fill_guest(CPUState *cs, vaddr address, int size,
+                                  MMUAccessType access_type, int mmu_idx,
+                                  bool probe, uintptr_t retaddr);
 #endif
 #endif /* !CONFIG_USER_ONLY */
 

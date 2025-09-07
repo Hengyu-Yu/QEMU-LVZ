@@ -104,6 +104,11 @@ DEF_HELPER_2(csrwr_estat, i64, env, tl)
 DEF_HELPER_2(csrwr_asid, i64, env, tl)
 DEF_HELPER_2(csrwr_tcfg, i64, env, tl)
 DEF_HELPER_2(csrwr_ticlr, i64, env, tl)
+
+/* Enhanced CSR helpers with LVZ support */
+DEF_HELPER_2(csrrd_with_lvz, tl, env, i32)
+DEF_HELPER_3(csrwr_with_lvz, tl, env, tl, i32)
+DEF_HELPER_4(csrxchg_with_lvz, tl, env, tl, tl, i32)
 DEF_HELPER_2(iocsrrd_b, i64, env, tl)
 DEF_HELPER_2(iocsrrd_h, i64, env, tl)
 DEF_HELPER_2(iocsrrd_w, i64, env, tl)
@@ -142,6 +147,7 @@ DEF_HELPER_1(gtlbrd, void, env)
 DEF_HELPER_1(gtlbwr, void, env)
 DEF_HELPER_1(gtlbfill, void, env)
 DEF_HELPER_2(hvcl, void, env, i32)
+DEF_HELPER_3(vm_exit, void, env, i32, tl)
 
 #endif
 
