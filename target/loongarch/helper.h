@@ -130,6 +130,19 @@ DEF_HELPER_4(lddir, tl, env, tl, tl, i32)
 DEF_HELPER_4(ldpte, void, env, tl, tl, i32)
 DEF_HELPER_1(ertn, void, env)
 DEF_HELPER_1(idle, void, env)
+
+/* LoongArch LVZ (Virtualization) helpers */
+DEF_HELPER_2(gcsrrd, tl, env, i32)
+DEF_HELPER_3(gcsrwr, tl, env, tl, i32)
+DEF_HELPER_4(gcsrxchg, tl, env, tl, tl, i32)
+DEF_HELPER_1(gtlbclr, void, env)
+DEF_HELPER_1(gtlbflush, void, env)
+DEF_HELPER_1(gtlbsrch, void, env)
+DEF_HELPER_1(gtlbrd, void, env)
+DEF_HELPER_1(gtlbwr, void, env)
+DEF_HELPER_1(gtlbfill, void, env)
+DEF_HELPER_2(hvcl, void, env, i32)
+
 #endif
 
 /* LoongArch LSX  */

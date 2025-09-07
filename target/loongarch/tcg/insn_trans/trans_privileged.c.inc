@@ -39,6 +39,16 @@ GEN_FALSE_TRANS(lddir)
 GEN_FALSE_TRANS(ertn)
 GEN_FALSE_TRANS(dbcl)
 GEN_FALSE_TRANS(idle)
+GEN_FALSE_TRANS(gcsrrd)
+GEN_FALSE_TRANS(gcsrwr)
+GEN_FALSE_TRANS(gcsrxchg)
+GEN_FALSE_TRANS(gtlbclr)
+GEN_FALSE_TRANS(gtlbflush)
+GEN_FALSE_TRANS(gtlbsrch)
+GEN_FALSE_TRANS(gtlbrd)
+GEN_FALSE_TRANS(gtlbwr)
+GEN_FALSE_TRANS(gtlbfill)
+GEN_FALSE_TRANS(hvcl)
 
 #else
 
@@ -495,4 +505,125 @@ static bool trans_idle(DisasContext *ctx, arg_idle *a)
     ctx->base.is_jmp = DISAS_NORETURN;
     return true;
 }
+
+/* LoongArch LVZ (Virtualization) Instructions */
+
+static bool trans_gcsrrd(DisasContext *ctx, arg_gcsrrd *a)
+{
+    if (check_plv(ctx)) {
+        return false;
+    }
+    
+    /* Read guest CSR instruction */
+    gen_helper_gcsrrd(gpr_dst(ctx, a->rd, EXT_NONE), tcg_env, 
+                      tcg_constant_i32(a->csr));
+    return true;
+}
+
+static bool trans_gcsrwr(DisasContext *ctx, arg_gcsrwr *a)
+{
+    if (check_plv(ctx)) {
+        return false;
+    }
+    
+    /* Write guest CSR instruction */
+    gen_helper_gcsrwr(gpr_dst(ctx, a->rd, EXT_NONE), tcg_env,
+                      gpr_src(ctx, a->rd, EXT_NONE),
+                      tcg_constant_i32(a->csr));
+    return true;
+}
+
+static bool trans_gcsrxchg(DisasContext *ctx, arg_gcsrxchg *a)
+{
+    if (check_plv(ctx)) {
+        return false;
+    }
+    
+    /* Exchange guest CSR instruction */
+    gen_helper_gcsrxchg(gpr_dst(ctx, a->rd, EXT_NONE), tcg_env,
+                        gpr_src(ctx, a->rj, EXT_NONE),
+                        gpr_src(ctx, a->rd, EXT_NONE),
+                        tcg_constant_i32(a->csr));
+    return true;
+}
+
+static bool trans_gtlbclr(DisasContext *ctx, arg_gtlbclr *a)
+{
+    if (check_plv(ctx)) {
+        return false;
+    }
+    
+    /* Clear guest TLB instruction */
+    gen_helper_gtlbclr(tcg_env);
+    return true;
+}
+
+static bool trans_gtlbflush(DisasContext *ctx, arg_gtlbflush *a)
+{
+    if (check_plv(ctx)) {
+        return false;
+    }
+    
+    /* Flush guest TLB instruction */
+    gen_helper_gtlbflush(tcg_env);
+    return true;
+}
+
+static bool trans_gtlbsrch(DisasContext *ctx, arg_gtlbsrch *a)
+{
+    if (check_plv(ctx)) {
+        return false;
+    }
+    
+    /* Search guest TLB instruction */
+    gen_helper_gtlbsrch(tcg_env);
+    return true;
+}
+
+static bool trans_gtlbrd(DisasContext *ctx, arg_gtlbrd *a)
+{
+    if (check_plv(ctx)) {
+        return false;
+    }
+    
+    /* Read guest TLB instruction */
+    gen_helper_gtlbrd(tcg_env);
+    return true;
+}
+
+static bool trans_gtlbwr(DisasContext *ctx, arg_gtlbwr *a)
+{
+    if (check_plv(ctx)) {
+        return false;
+    }
+    
+    /* Write guest TLB instruction */
+    gen_helper_gtlbwr(tcg_env);
+    return true;
+}
+
+static bool trans_gtlbfill(DisasContext *ctx, arg_gtlbfill *a)
+{
+    if (check_plv(ctx)) {
+        return false;
+    }
+    
+    /* Fill guest TLB instruction */
+    gen_helper_gtlbfill(tcg_env);
+    return true;
+}
+
+static bool trans_hvcl(DisasContext *ctx, arg_hvcl *a)
+{
+    if (check_plv(ctx)) {
+        return false;
+    }
+    
+    /* Hypervisor call instruction */
+    gen_helper_hvcl(tcg_env, tcg_constant_i32(a->imm));
+    ctx->base.is_jmp = DISAS_EXIT;
+    return true;
+}
+
 #endif
+
