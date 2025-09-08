@@ -888,18 +888,59 @@ static int guest_memory_translate(CPULoongArchState *env, target_ulong vaddr,
     int stage1_ret = get_physical_address(env, gpa, prot, vaddr, access_type, mmu_idx);
     
     if (stage1_ret != TLBRET_MATCH) {
+        /* Stage 1 translation failed - return the error */
+        qemu_log_mask(CPU_LOG_MMU, 
+                      "Stage 1 translation failed: VA=0x%llx, ret=%d\n",
+                      vaddr, stage1_ret);
         return stage1_ret;
     }
     
+    qemu_log_mask(CPU_LOG_MMU, 
+                  "Stage 1 complete: VA=0x%llx -> GPA=0x%llx\n", vaddr, *gpa);
+    
     /* Stage 2: Guest Physical Address to Host Physical Address */
     if (is_guest_mode(env) && has_lvz_capability(env)) {
-        /* In real hardware, this would involve hypervisor page tables */
-        /* For now, we assume direct mapping for simplicity */
-        *hpa = *gpa;
+        bool vm_exit_required = false;
+        int access_flags = 0;
         
-        /* Additional checks could be added here for hypervisor memory protection */
+        /* Convert MMUAccessType to our access flags */
+        if (access_type == MMU_DATA_LOAD) {
+            access_flags = ACCESS_TYPE_READ;
+        } else if (access_type == MMU_DATA_STORE) {
+            access_flags = ACCESS_TYPE_WRITE;
+        } else if (access_type == MMU_INST_FETCH) {
+            access_flags = ACCESS_TYPE_EXEC;
+        }
+        
+        /* Perform second-level address translation */
+        if (!loongarch_second_level_translate(env, *gpa, hpa, access_flags, 
+                                             mmu_idx, &vm_exit_required)) {
+            if (vm_exit_required) {
+                /* Trigger VM exit and let hypervisor handle it */
+                loongarch_trigger_vm_exit(env, env->vm_exit_ctx.exit_reason, 
+                                        *gpa, vaddr);
+                
+                qemu_log_mask(CPU_LOG_MMU, 
+                              "Stage 2 translation triggers VM exit: GPA=0x%llx\n", 
+                              *gpa);
+                
+                /* Return a special code to indicate VM exit */
+                return TLBRET_NOMATCH; /* Guest should handle this */
+            } else {
+                /* Stage 2 translation failed without VM exit */
+                qemu_log_mask(CPU_LOG_MMU, 
+                              "Stage 2 translation failed: GPA=0x%llx\n", *gpa);
+                return TLBRET_INVALID;
+            }
+        }
+        
+        qemu_log_mask(CPU_LOG_MMU, 
+                      "Stage 2 complete: GPA=0x%llx -> HPA=0x%llx\n", *gpa, *hpa);
     } else {
+        /* No second-level translation needed */
         *hpa = *gpa;
+        qemu_log_mask(CPU_LOG_MMU, 
+                      "No stage 2 needed: GPA=0x%llx -> HPA=0x%llx\n", *gpa, *hpa);
     }
     
     return TLBRET_MATCH;

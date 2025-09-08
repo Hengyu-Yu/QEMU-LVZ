@@ -573,6 +573,31 @@ static void loongarch_cpu_reset_hold(Object *obj, ResetType type)
     env->pc = 0x1c000000;
 #ifdef CONFIG_TCG
     memset(env->tlb, 0, sizeof(env->tlb));
+    
+    /* Initialize LVZ second-level address translation framework */
+    if (has_lvz_capability(env)) {
+        loongarch_init_second_level_translation(env);
+        
+        /* Initialize LVZ CSRs */
+        env->CSR_GSTAT = 0;
+        env->CSR_GCFG = 0;
+        env->CSR_GINTC = 0;
+        env->CSR_GCNTC = 0;
+        env->CSR_GTLBC = 0;
+        env->CSR_TRGP = 0;
+        
+        /* Initialize guest CSRs to match host CSRs initially */
+        env->GCSR_CRMD = env->CSR_CRMD;
+        env->GCSR_PRMD = env->CSR_PRMD;
+        env->GCSR_EUEN = env->CSR_EUEN;
+        env->GCSR_MISC = env->CSR_MISC;
+        env->GCSR_ECFG = env->CSR_ECFG;
+        env->GCSR_ESTAT = env->CSR_ESTAT;
+        env->GCSR_ERA = env->CSR_ERA;
+        env->GCSR_BADV = env->CSR_BADV;
+        env->GCSR_BADI = env->CSR_BADI;
+        env->GCSR_EENTRY = env->CSR_EENTRY;
+    }
 #endif
     if (kvm_enabled()) {
         kvm_arch_reset_vcpu(env);

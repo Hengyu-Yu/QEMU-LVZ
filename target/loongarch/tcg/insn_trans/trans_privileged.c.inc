@@ -514,6 +514,11 @@ static bool trans_gcsrrd(DisasContext *ctx, arg_gcsrrd *a)
         return false;
     }
     
+    /* Check if LVZ feature is enabled */
+    if (!avail_LVZ(ctx)) {
+        return false;
+    }
+    
     /* Read guest CSR instruction */
     gen_helper_gcsrrd(gpr_dst(ctx, a->rd, EXT_NONE), tcg_env, 
                       tcg_constant_i32(a->csr));
@@ -523,6 +528,11 @@ static bool trans_gcsrrd(DisasContext *ctx, arg_gcsrrd *a)
 static bool trans_gcsrwr(DisasContext *ctx, arg_gcsrwr *a)
 {
     if (check_plv(ctx)) {
+        return false;
+    }
+    
+    /* Check if LVZ feature is enabled */
+    if (!avail_LVZ(ctx)) {
         return false;
     }
     
@@ -536,6 +546,11 @@ static bool trans_gcsrwr(DisasContext *ctx, arg_gcsrwr *a)
 static bool trans_gcsrxchg(DisasContext *ctx, arg_gcsrxchg *a)
 {
     if (check_plv(ctx)) {
+        return false;
+    }
+    
+    /* Check if LVZ feature is enabled */
+    if (!avail_LVZ(ctx)) {
         return false;
     }
     
@@ -553,8 +568,14 @@ static bool trans_gtlbclr(DisasContext *ctx, arg_gtlbclr *a)
         return false;
     }
     
+    /* Check if LVZ feature is enabled */
+    if (!avail_LVZ(ctx)) {
+        return false;
+    }
+    
     /* Clear guest TLB instruction */
     gen_helper_gtlbclr(tcg_env);
+    check_mmu_idx(ctx);
     return true;
 }
 
@@ -564,14 +585,25 @@ static bool trans_gtlbflush(DisasContext *ctx, arg_gtlbflush *a)
         return false;
     }
     
+    /* Check if LVZ feature is enabled */
+    if (!avail_LVZ(ctx)) {
+        return false;
+    }
+    
     /* Flush guest TLB instruction */
     gen_helper_gtlbflush(tcg_env);
+    check_mmu_idx(ctx);
     return true;
 }
 
 static bool trans_gtlbsrch(DisasContext *ctx, arg_gtlbsrch *a)
 {
     if (check_plv(ctx)) {
+        return false;
+    }
+    
+    /* Check if LVZ feature is enabled */
+    if (!avail_LVZ(ctx)) {
         return false;
     }
     
@@ -586,6 +618,11 @@ static bool trans_gtlbrd(DisasContext *ctx, arg_gtlbrd *a)
         return false;
     }
     
+    /* Check if LVZ feature is enabled */
+    if (!avail_LVZ(ctx)) {
+        return false;
+    }
+    
     /* Read guest TLB instruction */
     gen_helper_gtlbrd(tcg_env);
     return true;
@@ -597,8 +634,14 @@ static bool trans_gtlbwr(DisasContext *ctx, arg_gtlbwr *a)
         return false;
     }
     
+    /* Check if LVZ feature is enabled */
+    if (!avail_LVZ(ctx)) {
+        return false;
+    }
+    
     /* Write guest TLB instruction */
     gen_helper_gtlbwr(tcg_env);
+    check_mmu_idx(ctx);
     return true;
 }
 
@@ -608,14 +651,25 @@ static bool trans_gtlbfill(DisasContext *ctx, arg_gtlbfill *a)
         return false;
     }
     
+    /* Check if LVZ feature is enabled */
+    if (!avail_LVZ(ctx)) {
+        return false;
+    }
+    
     /* Fill guest TLB instruction */
     gen_helper_gtlbfill(tcg_env);
+    check_mmu_idx(ctx);
     return true;
 }
 
 static bool trans_hvcl(DisasContext *ctx, arg_hvcl *a)
 {
     if (check_plv(ctx)) {
+        return false;
+    }
+    
+    /* Check if LVZ feature is enabled */
+    if (!avail_LVZ(ctx)) {
         return false;
     }
     

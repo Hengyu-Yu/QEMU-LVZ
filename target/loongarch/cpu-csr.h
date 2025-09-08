@@ -227,6 +227,9 @@ FIELD(CSR_GCFG, SITP, 6, 1)      /* Software interrupt in privileged mode */
 FIELD(CSR_GCFG, SITO, 7, 1)      /* Software interrupt in operating mode */
 FIELD(CSR_GCFG, TITP, 8, 1)      /* Timer interrupt in privileged mode */
 FIELD(CSR_GCFG, TITO, 9, 1)      /* Timer interrupt in operating mode */
+FIELD(CSR_GCFG, TOE, 10, 1)      /* Trap On timer Expire */
+FIELD(CSR_GCFG, TIT, 11, 1)      /* Trap on Interrupt and Timer */
+FIELD(CSR_GCFG, TOEP, 12, 1)     /* Trap On Error Page fault */
 
 #define LOONGARCH_CSR_GINTC          0x52 /* Guest interrupt config */
 FIELD(CSR_GINTC, VIP, 0, 8)      /* Virtual interrupt pending */
@@ -309,5 +312,13 @@ FIELD(CSR_GINTC, VIE, 8, 8)      /* Virtual interrupt enable */
 #define LOONGARCH_GCSR_DBG           0x2500 /* Guest DBG */
 #define LOONGARCH_GCSR_DERA          0x2501 /* Guest DERA */
 #define LOONGARCH_GCSR_DSAVE         0x2502 /* Guest DSAVE */
+
+/* Additional LVZ CSRs for second-level address translation */
+#define LOONGARCH_CSR_GTLBC          0x54   /* Guest TLB control */
+FIELD(CSR_GTLBC, TOTI, 0, 1)     /* Trap on TLB instruction */
+FIELD(CSR_GTLBC, USETGID, 1, 1)  /* Use Target GID */
+FIELD(CSR_GTLBC, TGID, 8, 8)     /* Target GID */
+
+#define LOONGARCH_CSR_TRGP           0x55   /* Trapped guest physical address */
 
 #endif /* LOONGARCH_CPU_CSR_H */

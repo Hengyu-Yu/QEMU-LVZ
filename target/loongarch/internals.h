@@ -41,6 +41,7 @@ enum {
     TLBRET_RI = 5,
     TLBRET_XI = 6,
     TLBRET_PE = 7,
+    TLBRET_SECOND_LEVEL_FAULT = 8,
 };
 
 extern const VMStateDescription vmstate_loongarch_cpu;

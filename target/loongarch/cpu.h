@@ -294,6 +294,26 @@ struct LoongArchTLB {
     uint64_t tlb_entry1;
 };
 typedef struct LoongArchTLB LoongArchTLB;
+
+/* Second-level address translation structure for LVZ */
+typedef struct LoongArchSecondLevelTLB {
+    uint64_t gpa_base;      /* Guest Physical Address base */
+    uint64_t hpa_base;      /* Host Physical Address base */
+    uint64_t size;          /* Translation region size */
+    uint8_t  gid;           /* Guest ID */
+    uint32_t flags;         /* Permission and attribute flags */
+    bool     valid;         /* Entry validity */
+} LoongArchSecondLevelTLB;
+
+/* VM exit context for second-level translation */
+typedef struct VMExitContext {
+    uint64_t fault_gpa;     /* Faulting Guest Physical Address */
+    uint64_t fault_gva;     /* Faulting Guest Virtual Address */
+    uint8_t  gid;           /* Guest ID causing the fault */
+    uint32_t exit_reason;   /* VM exit reason code */
+    uint32_t access_type;   /* Read/Write/Execute */
+    bool     is_tlb_refill; /* True for TLB refill, false for page fault */
+} VMExitContext;
 #endif
 
 typedef struct CPUArchState {
@@ -424,6 +444,12 @@ typedef struct CPUArchState {
     uint64_t GCSR_DERA;
     uint64_t GCSR_DSAVE;
 
+    /* LVZ second-level address translation related fields */
+    uint64_t CSR_GTLBC;         /* Guest TLB control */
+    uint64_t CSR_TRGP;          /* Trapped guest physical address */
+    VMExitContext vm_exit_ctx;  /* VM exit context */
+    bool lvz_enabled;           /* LVZ virtualization enabled flag */
+
 #ifdef CONFIG_TCG
     float_status fp_status;
     uint32_t fcsr0_mask;
@@ -542,14 +568,14 @@ static inline void cpu_get_tb_cpu_state(CPULoongArchState *env, vaddr *pc,
 #define CPU_RESOLVING_TYPE TYPE_LOONGARCH_CPU
 
 /* LVZ (LoongArch Virtualization) helper functions */
-static inline bool is_guest_mode(CPULoongArchState *env)
-{
-    return FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, VM);
-}
-
 static inline bool has_lvz_capability(CPULoongArchState *env)
 {
     return FIELD_EX32(env->cpucfg[2], CPUCFG2, LVZ);
+}
+
+static inline bool is_guest_mode(CPULoongArchState *env)
+{
+    return has_lvz_capability(env) && FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, VM);
 }
 
 static inline uint8_t get_guest_id(CPULoongArchState *env)
@@ -557,6 +583,281 @@ static inline uint8_t get_guest_id(CPULoongArchState *env)
     return FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, GID);
 }
 
+/* Enhanced virtual machine mode judgment function */
+static inline bool is_virtualization_mode_active(CPULoongArchState *env)
+{
+    return has_lvz_capability(env) && env->lvz_enabled;
+}
+
+/* Enhanced GID query function with validation */
+static inline uint8_t get_current_effective_gid(CPULoongArchState *env)
+{
+    if (!is_virtualization_mode_active(env)) {
+        return 0; /* Host mode always uses GID 0 */
+    }
+    
+    if (is_guest_mode(env)) {
+        return get_guest_id(env);
+    }
+    
+    return 0; /* Hypervisor mode uses GID 0 */
+}
+
+/* Check if current execution is in guest context */
+static inline bool is_guest_execution_context(CPULoongArchState *env)
+{
+    return is_virtualization_mode_active(env) && is_guest_mode(env);
+}
+
+/* Check if current execution is in hypervisor context */
+static inline bool is_hypervisor_execution_context(CPULoongArchState *env)
+{
+    return is_virtualization_mode_active(env) && !is_guest_mode(env);
+}
+
+/* Get target GID for TLB operations */
+static inline uint8_t get_target_gid(CPULoongArchState *env)
+{
+    if (!is_virtualization_mode_active(env)) {
+        return 0;
+    }
+    
+    /* Check if GTLBC.USETGID is set */
+    if (FIELD_EX64(env->CSR_GTLBC, CSR_GTLBC, USETGID)) {
+        return FIELD_EX64(env->CSR_GTLBC, CSR_GTLBC, TGID);
+    }
+    
+    /* Use current effective GID */
+    return get_current_effective_gid(env);
+}
+
+/* Validate GID bounds */
+static inline bool is_valid_gid(uint8_t gid)
+{
+    /* For uint8_t, all values 0-255 are valid by definition */
+    /* This function is kept for API consistency and future enhancement */
+    (void)gid; /* Suppress unused parameter warning */
+    return true;
+}
+
+/* Second-level address translation framework functions */
+static inline bool is_second_level_translation_enabled(CPULoongArchState *env)
+{
+    return is_guest_mode(env) && has_lvz_capability(env) && env->lvz_enabled;
+}
+
+static inline bool should_trigger_vm_exit(CPULoongArchState *env, uint32_t exit_reason)
+{
+    /* Only trigger VM exit if in guest mode */
+    if (!is_guest_execution_context(env)) {
+        return false;
+    }
+    
+    /* Check if this exit reason should trigger VM exit based on CSR_GCFG */
+    uint64_t gcfg = env->CSR_GCFG;
+    
+    switch (exit_reason) {
+    case VMEXIT_MMIO:
+        return FIELD_EX64(gcfg, CSR_GCFG, TOEP);  /* Trap On Error Page fault */
+    case VMEXIT_TIMER:
+        return FIELD_EX64(gcfg, CSR_GCFG, TOE);   /* Trap On timer Expire */
+    case VMEXIT_IOCSR:
+        return FIELD_EX64(gcfg, CSR_GCFG, TIT);   /* Trap on Interrupt and Timer */
+    case VMEXIT_CSRR:
+    case VMEXIT_CSRW:
+    case VMEXIT_CSRX:
+        return FIELD_EX64(gcfg, CSR_GCFG, TOEP);
+    case VMEXIT_HYPERCALL:
+        return true;  /* HVCL always triggers VM exit */
+    case VMEXIT_TLB:
+        return FIELD_EX64(env->CSR_GTLBC, CSR_GTLBC, TOTI); /* Trap on TLB instruction */
+    case VMEXIT_CPUCFG:
+        return FIELD_EX64(gcfg, CSR_GCFG, TOEP);
+    case VMEXIT_CACHE:
+        return FIELD_EX64(gcfg, CSR_GCFG, TOEP);
+    default:
+        return FIELD_EX64(gcfg, CSR_GCFG, TOEP);
+    }
+}
+
+static inline void prepare_vm_exit_context(CPULoongArchState *env, 
+                                         uint64_t fault_gpa, 
+                                         uint64_t fault_gva,
+                                         uint32_t exit_reason,
+                                         uint32_t access_type)
+{
+    if (!is_guest_execution_context(env)) {
+        return;
+    }
+    
+    /* Prepare VM exit context information */
+    env->vm_exit_ctx.fault_gpa = fault_gpa;
+    env->vm_exit_ctx.fault_gva = fault_gva;
+    env->vm_exit_ctx.gid = get_guest_id(env);
+    env->vm_exit_ctx.exit_reason = exit_reason;
+    env->vm_exit_ctx.access_type = access_type;
+    env->vm_exit_ctx.is_tlb_refill = (exit_reason == VMEXIT_TLB);
+    
+    /* Store fault GPA in CSR_TRGP for hypervisor access */
+    env->CSR_TRGP = fault_gpa;
+    
+    /* Note: Detailed logging moved to implementation functions to avoid header dependencies */
+}
+
+static inline bool tlb_entry_matches_gid(uint64_t tlb_misc, uint8_t gid)
+{
+    uint8_t entry_gid = FIELD_EX64(tlb_misc, TLB_MISC, GID);
+    return entry_gid == gid && FIELD_EX64(tlb_misc, TLB_MISC, E); /* Also check if entry is enabled */
+}
+
+/* Enhanced TLB entry matching with address space validation */
+static inline bool tlb_entry_matches_context(CPULoongArchState *env, 
+                                            const LoongArchTLB *tlb, 
+                                            uint8_t target_gid)
+{
+    if (!has_lvz_capability(env)) {
+        return FIELD_EX64(tlb->tlb_misc, TLB_MISC, E); /* Just check if enabled */
+    }
+    
+    uint8_t entry_gid = FIELD_EX64(tlb->tlb_misc, TLB_MISC, GID);
+    bool entry_enabled = FIELD_EX64(tlb->tlb_misc, TLB_MISC, E);
+    
+    return entry_enabled && (entry_gid == target_gid);
+}
+
+/* Second-level TLB lookup and management */
+static inline bool is_guest_page_tlb_entry(uint64_t tlb_misc)
+{
+    /* Guest page TLB entries have non-zero GID */
+    return FIELD_EX64(tlb_misc, TLB_MISC, GID) != 0;
+}
+
+static inline bool is_vmm_page_tlb_entry(uint64_t tlb_misc)
+{
+    /* VMM page TLB entries have zero GID for second-level translation */
+    return FIELD_EX64(tlb_misc, TLB_MISC, GID) == 0;
+}
+
+/* Access type definitions for second-level translation */
+#define ACCESS_TYPE_READ    1
+#define ACCESS_TYPE_WRITE   2
+#define ACCESS_TYPE_EXEC    4
+
+/* Second-level translation flags */
+#define SECOND_LEVEL_VALID      0x01
+#define SECOND_LEVEL_READABLE   0x02
+#define SECOND_LEVEL_WRITABLE   0x04
+#define SECOND_LEVEL_EXECUTABLE 0x08
+
+/* Enhanced second-level translation state management */
+static inline void enable_second_level_translation(CPULoongArchState *env)
+{
+    if (has_lvz_capability(env)) {
+        env->lvz_enabled = true;
+        /* Logging moved to implementation to avoid header dependencies */
+    }
+}
+
+static inline void disable_second_level_translation(CPULoongArchState *env)
+{
+    env->lvz_enabled = false;
+    /* Logging moved to implementation to avoid header dependencies */
+}
+
+/* Get the effective page size for translation */
+static inline uint32_t get_effective_page_size(CPULoongArchState *env, int tlb_index)
+{
+    if (tlb_index >= LOONGARCH_STLB) {
+        /* MTLB entry - use PS field from TLB entry */
+        return FIELD_EX64(env->tlb[tlb_index].tlb_misc, TLB_MISC, PS);
+    } else {
+        /* STLB entry - use system STLB page size */
+        return FIELD_EX64(env->CSR_STLBPS, CSR_STLBPS, PS);
+    }
+}
+
+/* Check if a virtual address is in guest direct-mapped window */
+static inline bool is_guest_direct_mapped(CPULoongArchState *env, vaddr va)
+{
+    if (!is_guest_execution_context(env)) {
+        return false;
+    }
+    
+    /* Check guest DMW entries */
+    for (int i = 0; i < 4; i++) {
+        uint64_t dmw = env->GCSR_DMW[i];
+        if (is_la64(env)) {
+            uint64_t vseg = FIELD_EX64(dmw, CSR_DMW_64, VSEG);
+            if ((va >> 60) == vseg) {
+                return true;
+            }
+        } else {
+            uint32_t vseg = FIELD_EX32(dmw, CSR_DMW_32, VSEG);
+            if ((va >> 29) == vseg) {
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
 void loongarch_cpu_post_init(Object *obj);
+
+/* Second-level address translation framework function declarations */
+#ifndef CONFIG_USER_ONLY
+bool loongarch_second_level_translate(CPULoongArchState *env, 
+                                     hwaddr gpa, 
+                                     hwaddr *hpa,
+                                     int access_type, 
+                                     int mmu_idx,
+                                     bool *vm_exit_required);
+
+void loongarch_trigger_vm_exit(CPULoongArchState *env, 
+                               uint32_t exit_reason,
+                               uint64_t fault_gpa, 
+                               uint64_t fault_gva);
+
+bool loongarch_guest_tlb_lookup(CPULoongArchState *env, 
+                               vaddr va, 
+                               hwaddr *gpa,
+                               int access_type, 
+                               int mmu_idx);
+
+bool loongarch_vmm_tlb_lookup(CPULoongArchState *env, 
+                             hwaddr gpa, 
+                             hwaddr *hpa,
+                             int access_type, 
+                             int mmu_idx);
+
+void loongarch_fill_guest_tlb(CPULoongArchState *env, 
+                             vaddr va, 
+                             hwaddr gpa,
+                             uint32_t flags, 
+                             int mmu_idx);
+
+void loongarch_fill_vmm_tlb(CPULoongArchState *env, 
+                           hwaddr gpa, 
+                           hwaddr hpa,
+                           uint32_t flags, 
+                           int mmu_idx);
+
+void loongarch_clear_guest_tlb_by_gid(CPULoongArchState *env, uint8_t gid);
+
+void loongarch_flush_guest_tlb_by_gid(CPULoongArchState *env, uint8_t gid);
+
+int loongarch_search_guest_tlb(CPULoongArchState *env, 
+                              vaddr va, 
+                              uint8_t gid);
+
+void loongarch_init_second_level_translation(CPULoongArchState *env);
+
+/* TLB helper functions with guest support */
+int loongarch_tlb_search_guest(CPULoongArchState *env, target_ulong vaddr, int *index);
+
+bool loongarch_cpu_tlb_fill_guest(CPUState *cs, vaddr address, int size,
+                                   MMUAccessType access_type, int mmu_idx,
+                                   bool probe, uintptr_t retaddr);
+#endif
 
 #endif /* LOONGARCH_CPU_H */
