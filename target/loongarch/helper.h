@@ -16,6 +16,14 @@ DEF_HELPER_FLAGS_3(crc32, TCG_CALL_NO_RWG_SE, tl, tl, tl, tl)
 DEF_HELPER_FLAGS_3(crc32c, TCG_CALL_NO_RWG_SE, tl, tl, tl, tl)
 DEF_HELPER_FLAGS_2(cpucfg, TCG_CALL_NO_RWG_SE, tl, env, tl)
 
+/* Enhanced virtualization support helpers */
+DEF_HELPER_FLAGS_2(cpucfg_vm, TCG_CALL_NO_RWG_SE, tl, env, tl)
+DEF_HELPER_1(vm_enter, void, env)
+DEF_HELPER_3(guest_exception, void, env, i32, tl)
+DEF_HELPER_2(vm_context_switch, void, env, i32)
+DEF_HELPER_2(vm_interrupt, void, env, i32)
+DEF_HELPER_1(vm_idle, void, env)
+
 /* Floating-point helper */
 DEF_HELPER_FLAGS_3(fadd_s, TCG_CALL_NO_WG, i64, env, i64, i64)
 DEF_HELPER_FLAGS_3(fadd_d, TCG_CALL_NO_WG, i64, env, i64, i64)
@@ -147,7 +155,13 @@ DEF_HELPER_1(gtlbrd, void, env)
 DEF_HELPER_1(gtlbwr, void, env)
 DEF_HELPER_1(gtlbfill, void, env)
 DEF_HELPER_2(hvcl, void, env, i32)
-DEF_HELPER_3(vm_exit, void, env, i32, tl)
+
+/* VM state management and exit helpers */
+DEF_HELPER_2(vm_exit, void, env, i32)
+DEF_HELPER_2(vm_exit_cpu, void, env, i32)
+DEF_HELPER_1(vm_save_state, void, env)
+DEF_HELPER_1(vm_restore_state, void, env)
+DEF_HELPER_5(vm_exit_with_fault, void, env, i32, i64, i64, i32)
 
 #endif
 

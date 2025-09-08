@@ -478,21 +478,4 @@ void helper_hvcl(CPULoongArchState *env, uint32_t code)
     trigger_vm_exit(env, VMEXIT_HYPERCALL, code);
 }
 
-/* VM exit helper - used for general VM exits */
-void helper_vm_exit(CPULoongArchState *env, uint32_t reason, target_ulong info)
-{
-    /* Check if we're in guest mode */
-    if (!is_guest_mode(env)) {
-        /* VM exit from host mode should not happen */
-        do_raise_exception(env, EXCCODE_IPE, GETPC());
-        return;
-    }
-    
-    /* Check if LVZ capability is available */
-    if (!has_lvz_capability(env)) {
-        do_raise_exception(env, EXCCODE_IPE, GETPC());
-        return;
-    }
-    
-    trigger_vm_exit(env, reason, info);
-}
+
