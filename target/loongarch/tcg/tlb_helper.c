@@ -522,14 +522,32 @@ void helper_tlbflush(CPULoongArchState *env)
     tlb_flush(env_cpu(env));
 }
 
-void helper_invtlb_all(CPULoongArchState *env)
+void helper_invtlb_all(CPULoongArchState *env, uint32_t hostonly)
 {
     for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
         /* Only invalidate entries belonging to current guest */
-        if (tlb_entry_matches_guest(env, &env->tlb[i])) {
+        if (is_guest_mode(env)) {
+            if (tlb_entry_matches_guest(env, &env->tlb[i])) {
+                env->tlb[i].tlb_misc = FIELD_DP64(env->tlb[i].tlb_misc,
+                                              TLB_MISC, E, 0);
+            }
+        } else if (hostonly == 0 ||
+            tlb_entry_matches_gid(env->tlb[i].tlb_misc, 0)) {
             env->tlb[i].tlb_misc = FIELD_DP64(env->tlb[i].tlb_misc,
                                               TLB_MISC, E, 0);
         }
+    }
+    tlb_flush(env_cpu(env));
+}
+
+void helper_invtlb_all_gid(CPULoongArchState *env, target_ulong info)
+{
+    uint16_t gid = (info >> 16) & 0xff;
+    for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
+        if (tlb_entry_matches_gid(env->tlb[i].tlb_misc, gid)) {
+            env->tlb[i].tlb_misc = FIELD_DP64(env->tlb[i].tlb_misc,
+                                              TLB_MISC, E, 0);
+            }
     }
     tlb_flush(env_cpu(env));
 }
@@ -548,6 +566,21 @@ void helper_invtlb_all_g(CPULoongArchState *env, uint32_t g)
     tlb_flush(env_cpu(env));
 }
 
+void helper_invtlb_all_g_gid(CPULoongArchState *env, uint32_t g, target_ulong info)
+{
+    uint16_t gid = (info >> 16) & 0xff;
+
+    for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
+        LoongArchTLB *tlb = &env->tlb[i];
+        uint8_t tlb_g = FIELD_EX64(tlb->tlb_entry0, TLBENTRY, G);
+
+        if (tlb_g == g && tlb_entry_matches_gid(tlb->tlb_misc, gid)) {
+            tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc, TLB_MISC, E, 0);
+        }
+    }
+    tlb_flush(env_cpu(env));
+}
+
 void helper_invtlb_all_asid(CPULoongArchState *env, target_ulong info)
 {
     uint16_t asid = info & R_CSR_ASID_ASID_MASK;
@@ -559,6 +592,23 @@ void helper_invtlb_all_asid(CPULoongArchState *env, target_ulong info)
 
         /* Only invalidate entries belonging to current guest with matching ASID */
         if (!tlb_g && (tlb_asid == asid) && tlb_entry_matches_guest(env, tlb)) {
+            tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc, TLB_MISC, E, 0);
+        }
+    }
+    tlb_flush(env_cpu(env));
+}
+
+void helper_invtlb_all_asid_gid(CPULoongArchState *env, target_ulong info)
+{
+    uint16_t asid = info & R_CSR_ASID_ASID_MASK;
+    uint16_t gid = (info >> 16) & 0xff;
+
+    for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
+        LoongArchTLB *tlb = &env->tlb[i];
+        uint8_t tlb_g = FIELD_EX64(tlb->tlb_entry0, TLBENTRY, G);
+        uint16_t tlb_asid = FIELD_EX64(tlb->tlb_misc, TLB_MISC, ASID);
+
+        if (!tlb_g && (tlb_asid == asid)  && tlb_entry_matches_gid(tlb->tlb_misc, gid)) {
             tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc, TLB_MISC, E, 0);
         }
     }
@@ -599,6 +649,40 @@ void helper_invtlb_page_asid(CPULoongArchState *env, target_ulong info,
     tlb_flush(env_cpu(env));
 }
 
+void helper_invtlb_page_asid_gid(CPULoongArchState *env, target_ulong info,
+                             target_ulong addr)
+{
+    uint16_t asid = info & 0x3ff;
+    uint16_t gid = (info >> 16) & 0xff;
+
+    for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
+        LoongArchTLB *tlb = &env->tlb[i];
+        uint8_t tlb_g = FIELD_EX64(tlb->tlb_entry0, TLBENTRY, G);
+        uint16_t tlb_asid = FIELD_EX64(tlb->tlb_misc, TLB_MISC, ASID);
+        uint64_t vpn, tlb_vppn;
+        uint8_t tlb_ps, compare_shift;
+
+        if (!tlb_entry_matches_gid(tlb->tlb_misc, gid)) {
+            continue;
+        }
+
+        if (i >= LOONGARCH_STLB) {
+            tlb_ps = FIELD_EX64(tlb->tlb_misc, TLB_MISC, PS);
+        } else {
+            tlb_ps = FIELD_EX64(env->CSR_STLBPS, CSR_STLBPS, PS);
+        }
+        tlb_vppn = FIELD_EX64(tlb->tlb_misc, TLB_MISC, VPPN);
+        vpn = (addr & TARGET_VIRT_MASK) >> (tlb_ps + 1);
+        compare_shift = tlb_ps + 1 - R_TLB_MISC_VPPN_SHIFT;
+
+        if (!tlb_g && (tlb_asid == asid) &&
+            (vpn == (tlb_vppn >> compare_shift))) {
+            tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc, TLB_MISC, E, 0);
+            }
+    }
+    tlb_flush(env_cpu(env));
+}
+
 void helper_invtlb_page_asid_or_g(CPULoongArchState *env,
                                   target_ulong info, target_ulong addr)
 {
@@ -629,6 +713,40 @@ void helper_invtlb_page_asid_or_g(CPULoongArchState *env,
             (vpn == (tlb_vppn >> compare_shift))) {
             tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc, TLB_MISC, E, 0);
         }
+    }
+    tlb_flush(env_cpu(env));
+}
+
+void helper_invtlb_page_asid_or_g_gid(CPULoongArchState *env,
+                                  target_ulong info, target_ulong addr)
+{
+    uint16_t asid = info & 0x3ff;
+    uint16_t gid = (info >> 16) & 0xff;
+
+    for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
+        LoongArchTLB *tlb = &env->tlb[i];
+        uint8_t tlb_g = FIELD_EX64(tlb->tlb_entry0, TLBENTRY, G);
+        uint16_t tlb_asid = FIELD_EX64(tlb->tlb_misc, TLB_MISC, ASID);
+        uint64_t vpn, tlb_vppn;
+        uint8_t tlb_ps, compare_shift;
+
+        if (!tlb_entry_matches_gid(tlb->tlb_misc, gid)) {
+            continue;
+        }
+
+        if (i >= LOONGARCH_STLB) {
+            tlb_ps = FIELD_EX64(tlb->tlb_misc, TLB_MISC, PS);
+        } else {
+            tlb_ps = FIELD_EX64(env->CSR_STLBPS, CSR_STLBPS, PS);
+        }
+        tlb_vppn = FIELD_EX64(tlb->tlb_misc, TLB_MISC, VPPN);
+        vpn = (addr & TARGET_VIRT_MASK) >> (tlb_ps + 1);
+        compare_shift = tlb_ps + 1 - R_TLB_MISC_VPPN_SHIFT;
+
+        if ((tlb_g || (tlb_asid == asid)) &&
+            (vpn == (tlb_vppn >> compare_shift))) {
+            tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc, TLB_MISC, E, 0);
+            }
     }
     tlb_flush(env_cpu(env));
 }
