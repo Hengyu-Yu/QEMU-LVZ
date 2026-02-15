@@ -68,16 +68,16 @@ enum {
     CSRFL_IO       = (1 << 2),
 };
 
-#define CSR_OFF_FUNCS(NAME, FL, RD, WR)                    \
-    [LOONGARCH_CSR_##NAME] = {                             \
-        .offset = offsetof(CPULoongArchState, CSR_##NAME), \
-        .flags = FL, .readfn = RD, .writefn = WR           \
+#define CSR_OFF_FUNCS(NAME, FL, RD, WR)                     \
+    [LOONGARCH_CSR_##NAME] = {                              \
+        .offset = offsetof(CPULoongArchState, CSR_##NAME),  \
+        .flags = FL, .readfn = RD, .writefn = WR            \
     }
 
-#define CSR_OFF_ARRAY(NAME, N)                                \
-    [LOONGARCH_CSR_##NAME(N)] = {                             \
-        .offset = offsetof(CPULoongArchState, CSR_##NAME[N]), \
-        .flags = 0, .readfn = NULL, .writefn = NULL           \
+#define CSR_OFF_ARRAY(NAME, N)                                 \
+    [LOONGARCH_CSR_##NAME(N)] = {                              \
+        .offset = offsetof(CPULoongArchState, CSR_##NAME[N]),  \
+        .flags = 0, .readfn = NULL, .writefn = NULL            \
     }
 
 #define CSR_OFF_FLAGS(NAME, FL) \
@@ -85,6 +85,24 @@ enum {
 
 #define CSR_OFF(NAME) \
     CSR_OFF_FLAGS(NAME, 0)
+
+#define GCSR_OFF_FUNCS(NAME, FL, RD, WR)                    \
+    [LOONGARCH_GCSR_##NAME] = {                             \
+        .offset = offsetof(CPULoongArchState, GCSR_##NAME), \
+        .flags = FL, .readfn = RD, .writefn = WR            \
+    }
+
+#define GCSR_OFF_ARRAY(NAME, N)                                \
+    [LOONGARCH_GCSR_##NAME(N)] = {                             \
+        .offset = offsetof(CPULoongArchState, GCSR_##NAME[N]), \
+        .flags = 0, .readfn = NULL, .writefn = NULL            \
+    }
+
+#define GCSR_OFF_FLAGS(NAME, FL) \
+    GCSR_OFF_FUNCS(NAME, FL, NULL, NULL)
+
+#define GCSR_OFF(NAME) \
+    GCSR_OFF_FLAGS(NAME, 0)
 
 static const CSRInfo csr_info[] = {
     CSR_OFF_FLAGS(CRMD, CSRFL_EXITTB),
@@ -161,6 +179,82 @@ static const CSRInfo csr_info[] = {
     CSR_OFF(DSAVE),
 };
 
+
+static const CSRInfo gcsr_info[] = {
+    GCSR_OFF_FLAGS(CRMD, CSRFL_EXITTB),
+    GCSR_OFF(PRMD),
+    GCSR_OFF_FLAGS(EUEN, CSRFL_EXITTB),
+    GCSR_OFF_FLAGS(MISC, CSRFL_READONLY),
+    GCSR_OFF(ECFG),
+    GCSR_OFF_FUNCS(ESTAT, CSRFL_EXITTB, NULL, gen_helper_csrwr_estat),
+    GCSR_OFF(ERA),
+    GCSR_OFF(BADV),
+    GCSR_OFF_FLAGS(BADI, CSRFL_READONLY),
+    GCSR_OFF(EENTRY),
+    GCSR_OFF(TLBIDX),
+    GCSR_OFF(TLBEHI),
+    GCSR_OFF(TLBELO0),
+    GCSR_OFF(TLBELO1),
+    GCSR_OFF_FUNCS(ASID, CSRFL_EXITTB, NULL, gen_helper_csrwr_asid),
+    GCSR_OFF(PGDL),
+    GCSR_OFF(PGDH),
+    GCSR_OFF_FUNCS(PGD, CSRFL_READONLY, gen_helper_csrrd_pgd, NULL),
+    GCSR_OFF(PWCL),
+    GCSR_OFF(PWCH),
+    GCSR_OFF(STLBPS),
+    GCSR_OFF(RVACFG),
+    GCSR_OFF_FUNCS(CPUID, CSRFL_READONLY, gen_helper_csrrd_cpuid, NULL),
+    GCSR_OFF_FLAGS(PRCFG1, CSRFL_READONLY),
+    GCSR_OFF_FLAGS(PRCFG2, CSRFL_READONLY),
+    GCSR_OFF_FLAGS(PRCFG3, CSRFL_READONLY),
+    GCSR_OFF_ARRAY(SAVE, 0),
+    GCSR_OFF_ARRAY(SAVE, 1),
+    GCSR_OFF_ARRAY(SAVE, 2),
+    GCSR_OFF_ARRAY(SAVE, 3),
+    GCSR_OFF_ARRAY(SAVE, 4),
+    GCSR_OFF_ARRAY(SAVE, 5),
+    GCSR_OFF_ARRAY(SAVE, 6),
+    GCSR_OFF_ARRAY(SAVE, 7),
+    GCSR_OFF_ARRAY(SAVE, 8),
+    GCSR_OFF_ARRAY(SAVE, 9),
+    GCSR_OFF_ARRAY(SAVE, 10),
+    GCSR_OFF_ARRAY(SAVE, 11),
+    GCSR_OFF_ARRAY(SAVE, 12),
+    GCSR_OFF_ARRAY(SAVE, 13),
+    GCSR_OFF_ARRAY(SAVE, 14),
+    GCSR_OFF_ARRAY(SAVE, 15),
+    GCSR_OFF(TID),
+    GCSR_OFF_FUNCS(TCFG, CSRFL_IO, NULL, gen_helper_csrwr_tcfg),
+    GCSR_OFF_FUNCS(TVAL, CSRFL_READONLY | CSRFL_IO, gen_helper_csrrd_tval, NULL),
+    GCSR_OFF(CNTC),
+    GCSR_OFF_FUNCS(TICLR, CSRFL_IO, NULL, gen_helper_csrwr_ticlr),
+    GCSR_OFF(LLBCTL),
+    GCSR_OFF(IMPCTL1),
+    GCSR_OFF(IMPCTL2),
+    GCSR_OFF(TLBRENTRY),
+    GCSR_OFF(TLBRBADV),
+    GCSR_OFF(TLBRERA),
+    GCSR_OFF(TLBRSAVE),
+    GCSR_OFF(TLBRELO0),
+    GCSR_OFF(TLBRELO1),
+    GCSR_OFF(TLBREHI),
+    GCSR_OFF(TLBRPRMD),
+    GCSR_OFF(MERRCTL),
+    GCSR_OFF(MERRINFO1),
+    GCSR_OFF(MERRINFO2),
+    GCSR_OFF(MERRENTRY),
+    GCSR_OFF(MERRERA),
+    GCSR_OFF(MERRSAVE),
+    GCSR_OFF(CTAG),
+    GCSR_OFF_ARRAY(DMW, 0),
+    GCSR_OFF_ARRAY(DMW, 1),
+    GCSR_OFF_ARRAY(DMW, 2),
+    GCSR_OFF_ARRAY(DMW, 3),
+    GCSR_OFF(DBG),
+    GCSR_OFF(DERA),
+    GCSR_OFF(DSAVE),
+};
+
 static bool check_plv(DisasContext *ctx)
 {
     if (ctx->plv == MMU_PLV_USER) {
@@ -178,6 +272,20 @@ static const CSRInfo *get_csr(unsigned csr_num)
         return NULL;
     }
     csr = &csr_info[csr_num];
+    if (csr->offset == 0) {
+        return NULL;
+    }
+    return csr;
+}
+
+static const CSRInfo *get_gcsr(unsigned csr_num)
+{
+    const CSRInfo *csr;
+
+    if (csr_num >= ARRAY_SIZE(csr_info)) {
+        return NULL;
+    }
+    csr = &gcsr_info[csr_num];
     if (csr->offset == 0) {
         return NULL;
     }
@@ -205,7 +313,11 @@ static bool trans_csrrd(DisasContext *ctx, arg_csrrd *a)
     if (check_plv(ctx)) {
         return false;
     }
-    csr = get_csr(a->csr);
+    if (ctx->guest_mode) {
+        csr = get_gcsr(a->csr);
+    } else {
+        csr = get_csr(a->csr);
+    }
     if (csr == NULL) {
         /* CSR is undefined: read as 0. */
         dest = tcg_constant_tl(0);
@@ -230,7 +342,11 @@ static bool trans_csrwr(DisasContext *ctx, arg_csrwr *a)
     if (check_plv(ctx)) {
         return false;
     }
-    csr = get_csr(a->csr);
+    if (ctx->guest_mode) {
+        csr = get_gcsr(a->csr);
+    } else {
+        csr = get_csr(a->csr);
+    }
     if (csr == NULL) {
         /* CSR is undefined: write ignored, read old_value as 0. */
         gen_set_gpr(a->rd, tcg_constant_tl(0), EXT_NONE);
@@ -261,7 +377,11 @@ static bool trans_csrxchg(DisasContext *ctx, arg_csrxchg *a)
     if (check_plv(ctx)) {
         return false;
     }
-    csr = get_csr(a->csr);
+    if (ctx->guest_mode) {
+        csr = get_gcsr(a->csr);
+    } else {
+        csr = get_csr(a->csr);
+    }
     if (csr == NULL) {
         /* CSR is undefined: write ignored, read old_value as 0. */
         gen_set_gpr(a->rd, tcg_constant_tl(0), EXT_NONE);
@@ -538,55 +658,114 @@ static bool trans_idle(DisasContext *ctx, arg_idle *a)
 
 static bool trans_gcsrrd(DisasContext *ctx, arg_gcsrrd *a)
 {
+    TCGv dest;
+    const CSRInfo *csr;
+
     if (check_plv(ctx)) {
         return false;
     }
     
     /* Check if LVZ feature is enabled */
-    if (!avail_LVZ(ctx)) {
+    if (!avail_LVZ(ctx) || ctx->guest_mode) {
         return false;
     }
-    
-    /* Read guest CSR instruction */
-    gen_helper_gcsrrd(gpr_dst(ctx, a->rd, EXT_NONE), tcg_env, 
-                      tcg_constant_i32(a->csr));
+    csr = get_gcsr(a->csr);
+    if (csr == NULL) {
+        /* CSR is undefined: read as 0. */
+        dest = tcg_constant_tl(0);
+    } else {
+        check_csr_flags(ctx, csr, false);
+        dest = gpr_dst(ctx, a->rd, EXT_NONE);
+        if (csr->readfn) {
+            csr->readfn(dest, tcg_env);
+        } else {
+            tcg_gen_ld_tl(dest, tcg_env, csr->offset);
+        }
+    }
+    gen_set_gpr(a->rd, dest, EXT_NONE);
     return true;
 }
 
 static bool trans_gcsrwr(DisasContext *ctx, arg_gcsrwr *a)
 {
+
+    TCGv dest, src1;
+    const CSRInfo *csr;
+
     if (check_plv(ctx)) {
         return false;
     }
-    
     /* Check if LVZ feature is enabled */
-    if (!avail_LVZ(ctx)) {
+    if (!avail_LVZ(ctx) || ctx->guest_mode) {
         return false;
     }
-    
-    /* Write guest CSR instruction */
-    gen_helper_gcsrwr(gpr_dst(ctx, a->rd, EXT_NONE), tcg_env,
-                      gpr_src(ctx, a->rd, EXT_NONE),
-                      tcg_constant_i32(a->csr));
+    csr = get_gcsr(a->csr);
+    if (csr == NULL) {
+        /* CSR is undefined: write ignored, read old_value as 0. */
+        gen_set_gpr(a->rd, tcg_constant_tl(0), EXT_NONE);
+        return true;
+    }
+    if (!check_csr_flags(ctx, csr, true)) {
+        /* CSR is readonly: trap. */
+        return false;
+    }
+    src1 = gpr_src(ctx, a->rd, EXT_NONE);
+    if (csr->writefn) {
+        dest = gpr_dst(ctx, a->rd, EXT_NONE);
+        csr->writefn(dest, tcg_env, src1);
+    } else {
+        dest = tcg_temp_new();
+        tcg_gen_ld_tl(dest, tcg_env, csr->offset);
+        tcg_gen_st_tl(src1, tcg_env, csr->offset);
+    }
+    gen_set_gpr(a->rd, dest, EXT_NONE);
     return true;
 }
 
 static bool trans_gcsrxchg(DisasContext *ctx, arg_gcsrxchg *a)
 {
+    TCGv src1, mask, oldv, newv, temp;
+    const CSRInfo *csr;
+
     if (check_plv(ctx)) {
         return false;
     }
-    
     /* Check if LVZ feature is enabled */
-    if (!avail_LVZ(ctx)) {
+    if (!avail_LVZ(ctx) || ctx->guest_mode) {
         return false;
     }
-    
-    /* Exchange guest CSR instruction */
-    gen_helper_gcsrxchg(gpr_dst(ctx, a->rd, EXT_NONE), tcg_env,
-                        gpr_src(ctx, a->rj, EXT_NONE),
-                        gpr_src(ctx, a->rd, EXT_NONE),
-                        tcg_constant_i32(a->csr));
+    csr = get_gcsr(a->csr);
+    if (csr == NULL) {
+        /* CSR is undefined: write ignored, read old_value as 0. */
+        gen_set_gpr(a->rd, tcg_constant_tl(0), EXT_NONE);
+        return true;
+    }
+
+    if (!check_csr_flags(ctx, csr, true)) {
+        /* CSR is readonly: trap. */
+        return false;
+    }
+
+    /* So far only readonly csrs have readfn. */
+    assert(csr->readfn == NULL);
+
+    src1 = gpr_src(ctx, a->rd, EXT_NONE);
+    mask = gpr_src(ctx, a->rj, EXT_NONE);
+    oldv = tcg_temp_new();
+    newv = tcg_temp_new();
+    temp = tcg_temp_new();
+
+    tcg_gen_ld_tl(oldv, tcg_env, csr->offset);
+    tcg_gen_and_tl(newv, src1, mask);
+    tcg_gen_andc_tl(temp, oldv, mask);
+    tcg_gen_or_tl(newv, newv, temp);
+
+    if (csr->writefn) {
+        csr->writefn(oldv, tcg_env, newv);
+    } else {
+        tcg_gen_st_tl(newv, tcg_env, csr->offset);
+    }
+    gen_set_gpr(a->rd, oldv, EXT_NONE);
     return true;
 }
 
@@ -708,4 +887,3 @@ static bool trans_hvcl(DisasContext *ctx, arg_hvcl *a)
 }
 
 #endif
-

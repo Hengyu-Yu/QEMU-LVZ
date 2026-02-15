@@ -18,272 +18,6 @@
 #include "cpu-csr.h"
 #include "qemu/guest-random.h"
 
-/* Helper function to get guest CSR pointer */
-static uint64_t *get_guest_csr_ptr(CPULoongArchState *env, uint32_t csr)
-{
-    switch (csr) {
-    case LOONGARCH_GCSR_CRMD:
-        return &env->GCSR_CRMD;
-    case LOONGARCH_GCSR_PRMD:
-        return &env->GCSR_PRMD;
-    case LOONGARCH_GCSR_EUEN:
-        return &env->GCSR_EUEN;
-    case LOONGARCH_GCSR_MISC:
-        return &env->GCSR_MISC;
-    case LOONGARCH_GCSR_ECFG:
-        return &env->GCSR_ECFG;
-    case LOONGARCH_GCSR_ESTAT:
-        return &env->GCSR_ESTAT;
-    case LOONGARCH_GCSR_ERA:
-        return &env->GCSR_ERA;
-    case LOONGARCH_GCSR_BADV:
-        return &env->GCSR_BADV;
-    case LOONGARCH_GCSR_BADI:
-        return &env->GCSR_BADI;
-    case LOONGARCH_GCSR_EENTRY:
-        return &env->GCSR_EENTRY;
-    case LOONGARCH_GCSR_TLBIDX:
-        return &env->GCSR_TLBIDX;
-    case LOONGARCH_GCSR_TLBEHI:
-        return &env->GCSR_TLBEHI;
-    case LOONGARCH_GCSR_TLBELO0:
-        return &env->GCSR_TLBELO0;
-    case LOONGARCH_GCSR_TLBELO1:
-        return &env->GCSR_TLBELO1;
-    case LOONGARCH_GCSR_ASID:
-        return &env->GCSR_ASID;
-    case LOONGARCH_GCSR_PGDL:
-        return &env->GCSR_PGDL;
-    case LOONGARCH_GCSR_PGDH:
-        return &env->GCSR_PGDH;
-    case LOONGARCH_GCSR_PGD:
-        return &env->GCSR_PGD;
-    case LOONGARCH_GCSR_PWCL:
-        return &env->GCSR_PWCL;
-    case LOONGARCH_GCSR_PWCH:
-        return &env->GCSR_PWCH;
-    case LOONGARCH_GCSR_STLBPS:
-        return &env->GCSR_STLBPS;
-    case LOONGARCH_GCSR_RVACFG:
-        return &env->GCSR_RVACFG;
-    case LOONGARCH_GCSR_CPUID:
-        return &env->GCSR_CPUID;
-    case LOONGARCH_GCSR_PRCFG1:
-        return &env->GCSR_PRCFG1;
-    case LOONGARCH_GCSR_PRCFG2:
-        return &env->GCSR_PRCFG2;
-    case LOONGARCH_GCSR_PRCFG3:
-        return &env->GCSR_PRCFG3;
-    case LOONGARCH_GCSR_TID:
-        return &env->GCSR_TID;
-    case LOONGARCH_GCSR_TCFG:
-        return &env->GCSR_TCFG;
-    case LOONGARCH_GCSR_TVAL:
-        return &env->GCSR_TVAL;
-    case LOONGARCH_GCSR_CNTC:
-        return &env->GCSR_CNTC;
-    case LOONGARCH_GCSR_TICLR:
-        return &env->GCSR_TICLR;
-    case LOONGARCH_GCSR_LLBCTL:
-        return &env->GCSR_LLBCTL;
-    case LOONGARCH_GCSR_IMPCTL1:
-        return &env->GCSR_IMPCTL1;
-    case LOONGARCH_GCSR_IMPCTL2:
-        return &env->GCSR_IMPCTL2;
-    case LOONGARCH_GCSR_TLBRENTRY:
-        return &env->GCSR_TLBRENTRY;
-    case LOONGARCH_GCSR_TLBRBADV:
-        return &env->GCSR_TLBRBADV;
-    case LOONGARCH_GCSR_TLBRERA:
-        return &env->GCSR_TLBRERA;
-    case LOONGARCH_GCSR_TLBRSAVE:
-        return &env->GCSR_TLBRSAVE;
-    case LOONGARCH_GCSR_TLBRELO0:
-        return &env->GCSR_TLBRELO0;
-    case LOONGARCH_GCSR_TLBRELO1:
-        return &env->GCSR_TLBRELO1;
-    case LOONGARCH_GCSR_TLBREHI:
-        return &env->GCSR_TLBREHI;
-    case LOONGARCH_GCSR_TLBRPRMD:
-        return &env->GCSR_TLBRPRMD;
-    case LOONGARCH_GCSR_MERRCTL:
-        return &env->GCSR_MERRCTL;
-    case LOONGARCH_GCSR_MERRINFO1:
-        return &env->GCSR_MERRINFO1;
-    case LOONGARCH_GCSR_MERRINFO2:
-        return &env->GCSR_MERRINFO2;
-    case LOONGARCH_GCSR_MERRENTRY:
-        return &env->GCSR_MERRENTRY;
-    case LOONGARCH_GCSR_MERRERA:
-        return &env->GCSR_MERRERA;
-    case LOONGARCH_GCSR_MERRSAVE:
-        return &env->GCSR_MERRSAVE;
-    case LOONGARCH_GCSR_CTAG:
-        return &env->GCSR_CTAG;
-    case LOONGARCH_GCSR_DMW(0):
-        return &env->GCSR_DMW[0];
-    case LOONGARCH_GCSR_DMW(1):
-        return &env->GCSR_DMW[1];
-    case LOONGARCH_GCSR_DMW(2):
-        return &env->GCSR_DMW[2];
-    case LOONGARCH_GCSR_DMW(3):
-        return &env->GCSR_DMW[3];
-    case LOONGARCH_GCSR_DBG:
-        return &env->GCSR_DBG;
-    case LOONGARCH_GCSR_DERA:
-        return &env->GCSR_DERA;
-    case LOONGARCH_GCSR_DSAVE:
-        return &env->GCSR_DSAVE;
-    default:
-        /* Handle GCSR_SAVE[0-15] */
-        if (csr >= LOONGARCH_GCSR_SAVE(0) && csr <= LOONGARCH_GCSR_SAVE(15)) {
-            int index = csr - LOONGARCH_GCSR_SAVE(0);
-            return &env->GCSR_SAVE[index];
-        }
-        return NULL;
-    }
-}
-
-/* Helper function to trigger VM exit */
-static void trigger_vm_exit(CPULoongArchState *env, uint32_t reason, target_ulong info)
-{
-    /* Set VM exit reason in GSTAT register */
-    env->CSR_GSTAT = FIELD_DP64(env->CSR_GSTAT, CSR_GSTAT, VM, 0);
-    
-    /* Store exit reason and info for hypervisor */
-    /* In a full implementation, this would store reason and info 
-     * in appropriate guest state registers */
-    
-    /* Generate a hypervisor exception to exit to hypervisor */
-    do_raise_exception(env, EXCCODE_HVC, GETPC());
-}
-
-/* Guest CSR read helper */
-target_ulong helper_gcsrrd(CPULoongArchState *env, uint32_t csr)
-{
-    /* Check if we're in guest mode */
-    if (!is_guest_mode(env)) {
-        /* If not in guest mode, this should cause an exception */
-        do_raise_exception(env, EXCCODE_IPE, GETPC());
-        return 0;
-    }
-    
-    uint64_t *csr_ptr = get_guest_csr_ptr(env, csr);
-    if (csr_ptr == NULL) {
-        /* Invalid CSR number, trigger VM exit */
-        trigger_vm_exit(env, VMEXIT_CSRR, csr);
-        return 0;
-    }
-    
-    /* Some CSRs might need special handling or VM exit */
-    switch (csr) {
-    case LOONGARCH_GCSR_ESTAT:
-        /* Check guest interrupt configuration */
-        if (!(env->CSR_GCFG & (1 << 6))) { /* SITP bit */
-            trigger_vm_exit(env, VMEXIT_CSRR, csr);
-            return 0;
-        }
-        break;
-    case LOONGARCH_GCSR_TCFG:
-    case LOONGARCH_GCSR_TVAL:
-        /* Timer access might need VM exit depending on guest config */
-        if (!(env->CSR_GCFG & (1 << 8))) { /* TITP bit */
-            trigger_vm_exit(env, VMEXIT_TIMER, csr);
-            return 0;
-        }
-        break;
-    }
-    
-    return *csr_ptr;
-}
-
-/* Guest CSR write helper */
-target_ulong helper_gcsrwr(CPULoongArchState *env, target_ulong val, uint32_t csr)
-{
-    /* Check if we're in guest mode */
-    if (!is_guest_mode(env)) {
-        /* If not in guest mode, this should cause an exception */
-        do_raise_exception(env, EXCCODE_IPE, GETPC());
-        return 0;
-    }
-    
-    uint64_t *csr_ptr = get_guest_csr_ptr(env, csr);
-    if (csr_ptr == NULL) {
-        /* Invalid CSR number, trigger VM exit */
-        trigger_vm_exit(env, VMEXIT_CSRW, csr);
-        return 0;
-    }
-    
-    target_ulong old_val = *csr_ptr;
-    
-    /* Some CSRs might need special handling or VM exit */
-    switch (csr) {
-    case LOONGARCH_GCSR_ESTAT:
-        /* Check guest interrupt configuration */
-        if (!(env->CSR_GCFG & (1 << 7))) { /* SITO bit */
-            trigger_vm_exit(env, VMEXIT_CSRW, csr);
-            return old_val;
-        }
-        break;
-    case LOONGARCH_GCSR_TCFG:
-        /* Timer config might need VM exit depending on guest config */
-        if (!(env->CSR_GCFG & (1 << 9))) { /* TITO bit */
-            trigger_vm_exit(env, VMEXIT_TIMER, csr);
-            return old_val;
-        }
-        break;
-    case LOONGARCH_GCSR_TICLR:
-        /* Timer clear always needs special handling */
-        trigger_vm_exit(env, VMEXIT_TIMER, csr);
-        return old_val;
-    }
-    
-    *csr_ptr = val;
-    return old_val;
-}
-
-/* Guest CSR exchange helper */
-target_ulong helper_gcsrxchg(CPULoongArchState *env, target_ulong rj, target_ulong rd, uint32_t csr)
-{
-    /* Check if we're in guest mode */
-    if (!is_guest_mode(env)) {
-        /* If not in guest mode, this should cause an exception */
-        do_raise_exception(env, EXCCODE_IPE, GETPC());
-        return 0;
-    }
-    
-    uint64_t *csr_ptr = get_guest_csr_ptr(env, csr);
-    if (csr_ptr == NULL) {
-        /* Invalid CSR number, trigger VM exit */
-        trigger_vm_exit(env, VMEXIT_CSRX, csr);
-        return 0;
-    }
-    
-    target_ulong old_val = *csr_ptr;
-    target_ulong new_val = (old_val & ~rd) | (rj & rd);
-    
-    /* Some CSRs might need special handling or VM exit */
-    switch (csr) {
-    case LOONGARCH_GCSR_ESTAT:
-        /* Check guest interrupt configuration */
-        if (!(env->CSR_GCFG & (1 << 7))) { /* SITO bit */
-            trigger_vm_exit(env, VMEXIT_CSRX, csr);
-            return old_val;
-        }
-        break;
-    case LOONGARCH_GCSR_TCFG:
-        /* Timer config might need VM exit */
-        if (!(env->CSR_GCFG & (1 << 9))) { /* TITO bit */
-            trigger_vm_exit(env, VMEXIT_TIMER, csr);
-            return old_val;
-        }
-        break;
-    }
-    
-    *csr_ptr = new_val;
-    return old_val;
-}
-
 /* Guest TLB clear helper */
 void helper_gtlbclr(CPULoongArchState *env)
 {
@@ -300,7 +34,7 @@ void helper_gtlbclr(CPULoongArchState *env)
     }
     
     /* In guest mode, TLB operations may need VM exit */
-    trigger_vm_exit(env, VMEXIT_TLB, 0);
+    trigger_vm_exit(env);
 }
 
 /* Guest TLB flush helper */
@@ -319,7 +53,7 @@ void helper_gtlbflush(CPULoongArchState *env)
     }
     
     /* In guest mode, TLB operations may need VM exit */
-    trigger_vm_exit(env, VMEXIT_TLB, 1);
+    trigger_vm_exit(env);
 }
 
 /* Guest TLB search helper */
@@ -340,7 +74,7 @@ void helper_gtlbsrch(CPULoongArchState *env)
     /* Get guest TLB search parameters from guest CSRs */
     uint64_t ehi = env->GCSR_TLBEHI;
     uint64_t asid = env->GCSR_ASID;
-    uint8_t gid = get_guest_id(env);
+    uint8_t gid = get_gid(env);
     
     /* Search in guest TLB entries */
     /* This is a simplified implementation - in practice, you'd search
@@ -392,7 +126,7 @@ void helper_gtlbrd(CPULoongArchState *env)
         return;
     }
     
-    uint8_t gid = get_guest_id(env);
+    uint8_t gid = get_gid(env);
     
     /* Check if the TLB entry belongs to this guest */
     if (env->tlb[index].tlb_misc & (1ULL << 54)) { /* Entry has GID */
@@ -427,7 +161,7 @@ void helper_gtlbwr(CPULoongArchState *env)
         return;
     }
     
-    uint8_t gid = get_guest_id(env);
+    uint8_t gid = get_gid(env);
     
     /* Write guest CSR values to TLB entry with guest ID */
     env->tlb[index].tlb_misc = 0;
@@ -467,7 +201,7 @@ void helper_gtlbfill(CPULoongArchState *env)
     qemu_guest_getrandom_nofail(&random_index, sizeof(uint32_t));
     random_index = random_index % LOONGARCH_STLB; /* Use STLB range only */
     
-    uint8_t gid = get_guest_id(env);
+    uint8_t gid = get_gid(env);
     
     /* Fill TLB entry at random index */
     env->tlb[random_index].tlb_misc = 0;
@@ -511,7 +245,8 @@ void helper_hvcl(CPULoongArchState *env, uint32_t code)
      * or memory location that the hypervisor can access */
     
     /* HVCL instruction causes a VM exit to hypervisor with hypercall reason */
-    trigger_vm_exit(env, VMEXIT_HYPERCALL, code);
+    trigger_vm_exit(env);
+    do_raise_exception(env, EXCCODE_HVC, GETPC());
 }
 
 

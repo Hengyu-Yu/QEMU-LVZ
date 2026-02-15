@@ -213,27 +213,32 @@ FIELD(CSR_DBG, ECODE, 16, 6)
 /* LVZ (LoongArch Virtualization) CSRs */
 /* Guest Status and Control CSRs */
 #define LOONGARCH_CSR_GSTAT          0x50 /* Guest status */
-FIELD(CSR_GSTAT, GID, 0, 8)      /* Guest ID */
-FIELD(CSR_GSTAT, GIDBIT, 8, 4)   /* Guest ID bits */
-FIELD(CSR_GSTAT, PVM, 16, 1)     /* Previous virtualization mode */
-FIELD(CSR_GSTAT, VM, 17, 1)      /* Virtualization mode */
+FIELD(CSR_GSTAT, PGM, 1, 1)     /* Virtualization mode */
+FIELD(CSR_GSTAT, GIDBIT, 4, 6)   /* Guest ID bits */
+FIELD(CSR_GSTAT, GID, 16, 8)      /* Guest ID */
 
 #define LOONGARCH_CSR_GCFG           0x51 /* Guest config */
-FIELD(CSR_GCFG, GCIP, 0, 1)      /* Guest counter in privileged mode */
-FIELD(CSR_GCFG, GCOP, 1, 1)      /* Guest counter in operating mode */
-FIELD(CSR_GCFG, MATP, 2, 2)      /* Memory access type for privileged mode */
-FIELD(CSR_GCFG, MATO, 4, 2)      /* Memory access type for operating mode */
-FIELD(CSR_GCFG, SITP, 6, 1)      /* Software interrupt in privileged mode */
-FIELD(CSR_GCFG, SITO, 7, 1)      /* Software interrupt in operating mode */
-FIELD(CSR_GCFG, TITP, 8, 1)      /* Timer interrupt in privileged mode */
-FIELD(CSR_GCFG, TITO, 9, 1)      /* Timer interrupt in operating mode */
-FIELD(CSR_GCFG, TOE, 10, 1)      /* Trap On timer Expire */
-FIELD(CSR_GCFG, TIT, 11, 1)      /* Trap on Interrupt and Timer */
-FIELD(CSR_GCFG, TOEP, 12, 1)     /* Trap On Error Page fault */
+FIELD(CSR_GCFG, MATP, 0, 4)
+FIELD(CSR_GCFG, MATC, 4, 2)
+FIELD(CSR_GCFG, TOPIP, 6, 1)
+FIELD(CSR_GCFG, TOPI, 7, 1)
+FIELD(CSR_GCFG, TOTIP, 8, 1)
+FIELD(CSR_GCFG, TOTI, 9, 1)
+FIELD(CSR_GCFG, TOEP, 10, 1)
+FIELD(CSR_GCFG, TOE, 11, 1)
+FIELD(CSR_GCFG, TOPP, 12, 1)
+FIELD(CSR_GCFG, TOP, 13, 1)
+FIELD(CSR_GCFG, TOHUP, 14, 1)
+FIELD(CSR_GCFG, TOHU, 15, 1)
+FIELD(CSR_GCFG, TOCIP, 16, 4)
+FIELD(CSR_GCFG, TOCI, 20, 2)
+FIELD(CSR_GCFG, GPMP, 23, 1)
+FIELD(CSR_GCFG, GPMNum, 24, 3)
 
 #define LOONGARCH_CSR_GINTC          0x52 /* Guest interrupt config */
-FIELD(CSR_GINTC, VIP, 0, 8)      /* Virtual interrupt pending */
-FIELD(CSR_GINTC, VIE, 8, 8)      /* Virtual interrupt enable */
+FIELD(CSR_GINTC, HWIS, 0, 8)
+FIELD(CSR_GINTC, HWIP, 8, 8)
+FIELD(CSR_GINTC, HWIC, 16, 8)
 
 #define LOONGARCH_CSR_GCNTC          0x53 /* Guest counter compensation */
 

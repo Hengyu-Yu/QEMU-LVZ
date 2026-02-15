@@ -41,7 +41,14 @@ enum {
     TLBRET_RI = 5,
     TLBRET_XI = 6,
     TLBRET_PE = 7,
-    TLBRET_SECOND_LEVEL_FAULT = 8,
+    TLBRET_HOST_MATCH = 8,
+    TLBRET_HOST_BADADDR = 9,
+    TLBRET_HOST_NOMATCH = 10,
+    TLBRET_HOST_INVALID = 11,
+    TLBRET_HOST_DIRTY = 12,
+    TLBRET_HOST_RI = 13,
+    TLBRET_HOST_XI = 14,
+    TLBRET_HOST_PE = 15,
 };
 
 extern const VMStateDescription vmstate_loongarch_cpu;
@@ -54,7 +61,7 @@ uint64_t cpu_loongarch_get_constant_timer_ticks(LoongArchCPU *cpu);
 void cpu_loongarch_store_constant_timer_config(LoongArchCPU *cpu,
                                                uint64_t value);
 bool loongarch_tlb_search(CPULoongArchState *env, target_ulong vaddr,
-                          int *index);
+                          int *index, bool guest);
 int get_physical_address(CPULoongArchState *env, hwaddr *physical,
                          int *prot, target_ulong address,
                          MMUAccessType access_type, int mmu_idx);

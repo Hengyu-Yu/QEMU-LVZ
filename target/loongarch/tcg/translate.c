@@ -120,6 +120,7 @@ static void loongarch_tr_init_disas_context(DisasContextBase *dcbase,
     CPULoongArchState *env = cpu_env(cs);
     DisasContext *ctx = container_of(dcbase, DisasContext, base);
 
+    ctx->guest_mode = env->guest_mode;
     ctx->page_start = ctx->base.pc_first & TARGET_PAGE_MASK;
     ctx->plv = ctx->base.tb->flags & HW_FLAGS_PLV_MASK;
     if (ctx->base.tb->flags & HW_FLAGS_CRMD_PG) {
