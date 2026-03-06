@@ -123,7 +123,10 @@ FIELD(FCSR0, CAUSE, 24, 5)
 #define  EXCCODE_WPEM                EXCODE(19, 1)
 #define  EXCCODE_BTD                 EXCODE(20, 0)
 #define  EXCCODE_BTE                 EXCODE(21, 0)
-#define  EXCCODE_HVC                 EXCODE(22, 0) /* Hypervisor call */
+#define  EXCCODE_GSPR                EXCODE(22, 0)
+#define  EXCCODE_HVC                 EXCODE(23, 0)
+#define  EXCCODE_GCSC                EXCODE(24, 0)
+#define  EXCCODE_GCHC                EXCODE(25, 0)
 #define  EXCCODE_DBP                 EXCODE(26, 0) /* Reserved subcode used for debug */
 
 /* cpucfg[0] bits */
@@ -361,10 +364,12 @@ typedef struct CPUArchState {
     uint64_t CSR_DSAVE;
 
     /* LVZ (LoongArch Virtualization) CSRs */
-    uint64_t CSR_GSTAT;         /* Guest status */
-    uint64_t CSR_GCFG;          /* Guest config */
-    uint64_t CSR_GINTC;         /* Guest interrupt config */
-    uint64_t CSR_GCNTC;         /* Guest counter compensation */
+    uint64_t CSR_GSTAT;
+    uint64_t CSR_GCFG;
+    uint64_t CSR_GINTC;
+    uint64_t CSR_GCNTC;
+    uint64_t CSR_GTLBC;
+    uint64_t CSR_TRGP;
 
     /* Guest CSR registers (GCSR) */
     uint64_t GCSR_CRMD;
@@ -421,10 +426,13 @@ typedef struct CPUArchState {
     uint64_t GCSR_DBG;
     uint64_t GCSR_DERA;
     uint64_t GCSR_DSAVE;
+    uint64_t GCSR_GSTAT;
+    uint64_t GCSR_GCFG;
+    uint64_t GCSR_GINTC;
+    uint64_t GCSR_GCNTC;
+    uint64_t GCSR_GTLBC;
+    uint64_t GCSR_TRGP;
 
-    /* LVZ second-level address translation related fields */
-    uint64_t CSR_GTLBC;         /* Guest TLB control */
-    uint64_t CSR_TRGP;          /* Trapped guest physical address */
     bool guest_mode;
 
 #ifdef CONFIG_TCG
@@ -578,7 +586,6 @@ static inline bool will_return_to_guest(CPULoongArchState *env)
 
 static inline void trigger_vm_exit(CPULoongArchState *env)
 {
-    env->CSR_GSTAT = FIELD_DP64(env->CSR_GSTAT, CSR_GSTAT, PGM, 1);
     env->guest_mode = false;
 }
 

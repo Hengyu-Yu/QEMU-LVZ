@@ -66,6 +66,7 @@ enum {
     CSRFL_READONLY = (1 << 0),
     CSRFL_EXITTB   = (1 << 1),
     CSRFL_IO       = (1 << 2),
+    CSRFL_GUEST_READONLY = (1 << 3),
 };
 
 #define CSR_OFF_FUNCS(NAME, FL, RD, WR)                     \
@@ -87,13 +88,13 @@ enum {
     CSR_OFF_FLAGS(NAME, 0)
 
 #define GCSR_OFF_FUNCS(NAME, FL, RD, WR)                    \
-    [LOONGARCH_GCSR_##NAME] = {                             \
+    [LOONGARCH_CSR_##NAME] = {                             \
         .offset = offsetof(CPULoongArchState, GCSR_##NAME), \
         .flags = FL, .readfn = RD, .writefn = WR            \
     }
 
 #define GCSR_OFF_ARRAY(NAME, N)                                \
-    [LOONGARCH_GCSR_##NAME(N)] = {                             \
+    [LOONGARCH_CSR_##NAME(N)] = {                             \
         .offset = offsetof(CPULoongArchState, GCSR_##NAME[N]), \
         .flags = 0, .readfn = NULL, .writefn = NULL            \
     }
@@ -103,6 +104,9 @@ enum {
 
 #define GCSR_OFF(NAME) \
     GCSR_OFF_FLAGS(NAME, 0)
+
+#define GCSR_GSPR(NAME) \
+    GCSR_OFF_FUNCS(NAME, 0, gen_helper_gspr_rd, gen_helper_gspr_wr)
 
 static const CSRInfo csr_info[] = {
     CSR_OFF_FLAGS(CRMD, CSRFL_EXITTB),
@@ -177,8 +181,13 @@ static const CSRInfo csr_info[] = {
     CSR_OFF(DBG),
     CSR_OFF(DERA),
     CSR_OFF(DSAVE),
+    CSR_OFF(GTLBC),
+    CSR_OFF(TRGP),
+    CSR_OFF(GSTAT),
+    CSR_OFF(GCFG),
+    CSR_OFF(GINTC),
+    CSR_OFF(GCNTC),
 };
-
 
 static const CSRInfo gcsr_info[] = {
     GCSR_OFF_FLAGS(CRMD, CSRFL_EXITTB),
@@ -186,16 +195,16 @@ static const CSRInfo gcsr_info[] = {
     GCSR_OFF_FLAGS(EUEN, CSRFL_EXITTB),
     GCSR_OFF_FLAGS(MISC, CSRFL_READONLY),
     GCSR_OFF(ECFG),
-    GCSR_OFF_FUNCS(ESTAT, CSRFL_EXITTB, NULL, gen_helper_csrwr_estat),
+    GCSR_OFF_FUNCS(ESTAT, CSRFL_EXITTB, NULL, gen_helper_gcsrwr_estat),
     GCSR_OFF(ERA),
     GCSR_OFF(BADV),
-    GCSR_OFF_FLAGS(BADI, CSRFL_READONLY),
+    GCSR_OFF_FLAGS(BADI, CSRFL_GUEST_READONLY),
     GCSR_OFF(EENTRY),
     GCSR_OFF(TLBIDX),
     GCSR_OFF(TLBEHI),
     GCSR_OFF(TLBELO0),
     GCSR_OFF(TLBELO1),
-    GCSR_OFF_FUNCS(ASID, CSRFL_EXITTB, NULL, gen_helper_csrwr_asid),
+    GCSR_OFF_FUNCS(ASID, CSRFL_EXITTB, NULL, gen_helper_gcsrwr_asid),
     GCSR_OFF(PGDL),
     GCSR_OFF(PGDH),
     GCSR_OFF_FUNCS(PGD, CSRFL_READONLY, gen_helper_csrrd_pgd, NULL),
@@ -203,7 +212,7 @@ static const CSRInfo gcsr_info[] = {
     GCSR_OFF(PWCH),
     GCSR_OFF(STLBPS),
     GCSR_OFF(RVACFG),
-    GCSR_OFF_FUNCS(CPUID, CSRFL_READONLY, gen_helper_csrrd_cpuid, NULL),
+    GCSR_OFF_FLAGS(CPUID, CSRFL_READONLY),
     GCSR_OFF_FLAGS(PRCFG1, CSRFL_READONLY),
     GCSR_OFF_FLAGS(PRCFG2, CSRFL_READONLY),
     GCSR_OFF_FLAGS(PRCFG3, CSRFL_READONLY),
@@ -224,13 +233,13 @@ static const CSRInfo gcsr_info[] = {
     GCSR_OFF_ARRAY(SAVE, 14),
     GCSR_OFF_ARRAY(SAVE, 15),
     GCSR_OFF(TID),
-    GCSR_OFF_FUNCS(TCFG, CSRFL_IO, NULL, gen_helper_csrwr_tcfg),
-    GCSR_OFF_FUNCS(TVAL, CSRFL_READONLY | CSRFL_IO, gen_helper_csrrd_tval, NULL),
+    GCSR_OFF_FLAGS(TCFG, CSRFL_IO),
+    GCSR_OFF_FLAGS(TVAL, CSRFL_GUEST_READONLY | CSRFL_IO),
     GCSR_OFF(CNTC),
-    GCSR_OFF_FUNCS(TICLR, CSRFL_IO, NULL, gen_helper_csrwr_ticlr),
+    GCSR_OFF_FUNCS(TICLR, CSRFL_IO, NULL, NULL),
     GCSR_OFF(LLBCTL),
-    GCSR_OFF(IMPCTL1),
-    GCSR_OFF(IMPCTL2),
+    GCSR_GSPR(IMPCTL1),
+    GCSR_GSPR(IMPCTL2),
     GCSR_OFF(TLBRENTRY),
     GCSR_OFF(TLBRBADV),
     GCSR_OFF(TLBRERA),
@@ -239,20 +248,26 @@ static const CSRInfo gcsr_info[] = {
     GCSR_OFF(TLBRELO1),
     GCSR_OFF(TLBREHI),
     GCSR_OFF(TLBRPRMD),
-    GCSR_OFF(MERRCTL),
-    GCSR_OFF(MERRINFO1),
-    GCSR_OFF(MERRINFO2),
-    GCSR_OFF(MERRENTRY),
-    GCSR_OFF(MERRERA),
-    GCSR_OFF(MERRSAVE),
-    GCSR_OFF(CTAG),
+    GCSR_GSPR(MERRCTL),
+    GCSR_GSPR(MERRINFO1),
+    GCSR_GSPR(MERRINFO2),
+    GCSR_GSPR(MERRENTRY),
+    GCSR_GSPR(MERRERA),
+    GCSR_GSPR(MERRSAVE),
+    GCSR_GSPR(CTAG),
     GCSR_OFF_ARRAY(DMW, 0),
     GCSR_OFF_ARRAY(DMW, 1),
     GCSR_OFF_ARRAY(DMW, 2),
     GCSR_OFF_ARRAY(DMW, 3),
-    GCSR_OFF(DBG),
-    GCSR_OFF(DERA),
-    GCSR_OFF(DSAVE),
+    GCSR_GSPR(DBG),
+    GCSR_GSPR(DERA),
+    GCSR_GSPR(DSAVE),
+    GCSR_GSPR(GTLBC),
+    GCSR_GSPR(TRGP),
+    GCSR_GSPR(GSTAT),
+    GCSR_GSPR(GCFG),
+    GCSR_GSPR(GINTC),
+    GCSR_GSPR(GCNTC),
 };
 
 static bool check_plv(DisasContext *ctx)
@@ -297,6 +312,11 @@ static bool check_csr_flags(DisasContext *ctx, const CSRInfo *csr, bool write)
     if ((csr->flags & CSRFL_READONLY) && write) {
         return false;
     }
+
+    if ((csr->flags & CSRFL_GUEST_READONLY) && ctx->guest_mode && write) {
+        return false;
+    }
+
     if ((csr->flags & CSRFL_IO) && translator_io_start(&ctx->base)) {
         ctx->base.is_jmp = DISAS_EXIT_UPDATE;
     } else if ((csr->flags & CSRFL_EXITTB) && write) {
@@ -422,6 +442,10 @@ static bool gen_iocsrrd(DisasContext *ctx, arg_rr *a,
     TCGv dest = gpr_dst(ctx, a->rd, EXT_NONE);
     TCGv src1 = gpr_src(ctx, a->rj, EXT_NONE);
 
+    if (ctx->guest_mode) {
+        gen_helper_gspr(tcg_env);
+    }
+
     if (check_plv(ctx)) {
         return false;
     }
@@ -434,6 +458,10 @@ static bool gen_iocsrwr(DisasContext *ctx, arg_rr *a,
 {
     TCGv val = gpr_src(ctx, a->rd, EXT_NONE);
     TCGv addr = gpr_src(ctx, a->rj, EXT_NONE);
+
+    if (ctx->guest_mode) {
+        gen_helper_gspr(tcg_env);
+    }
 
     if (check_plv(ctx)) {
         return false;

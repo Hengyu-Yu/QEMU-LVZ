@@ -20,10 +20,10 @@ target_ulong helper_csrrd_pgd(CPULoongArchState *env)
 {
     int64_t v;
 
-    if (GET_CSR(env, TLBRERA) & 0x1) {
-        v = GET_CSR(env, TLBRBADV);
+    if (env->CSR_TLBRERA & 0x1) {
+        v = env->CSR_TLBRBADV;
     } else {
-        v = GET_CSR(env, BADV);
+        v = env->CSR_BADV;
     }
 
     if ((v >> 63) & 0x1) {
@@ -35,12 +35,31 @@ target_ulong helper_csrrd_pgd(CPULoongArchState *env)
     return v;
 }
 
+target_ulong helper_gcsrrd_pgd(CPULoongArchState *env)
+{
+    int64_t v;
+
+    if (env->GCSR_TLBRERA & 0x1) {
+        v = env->GCSR_TLBRBADV;
+    } else {
+        v = env->GCSR_BADV;
+    }
+
+    if ((v >> 63) & 0x1) {
+        v = env->GCSR_PGDH;
+    } else {
+        v = env->GCSR_PGDL;
+    }
+
+    return v;
+}
+
 target_ulong helper_csrrd_cpuid(CPULoongArchState *env)
 {
     LoongArchCPU *lac = env_archcpu(env);
 
-    SET_CSR(env, CPUID, CPU(lac)->cpu_index);
-    return GET_CSR(env, CPUID);
+    env->GCSR_CPUID = CPU(lac)->cpu_index;
+    return env->GCSR_CPUID;
 }
 
 target_ulong helper_csrrd_tval(CPULoongArchState *env)
@@ -51,18 +70,43 @@ target_ulong helper_csrrd_tval(CPULoongArchState *env)
 
 target_ulong helper_csrwr_estat(CPULoongArchState *env, target_ulong val)
 {
-    int64_t old_v = GET_CSR(env, ESTAT);
-    SET_CSR(env, ESTAT, deposit64(env->CSR_ESTAT, 0, 2, val));
+    int64_t old_v = env->CSR_ESTAT;
+    env->CSR_ESTAT = deposit64(env->CSR_ESTAT, 0, 2, val);
+
+    return old_v;
+}
+
+target_ulong helper_gcsrwr_estat(CPULoongArchState *env, target_ulong val)
+{
+    int64_t old_v = env->CSR_ESTAT;
+    env->GCSR_ESTAT = deposit64(env->GCSR_ESTAT, 0, 2, val);
+    if (!env->guest_mode) {
+        env->GCSR_ESTAT = deposit64(env->GCSR_ESTAT, 2, 11, val);
+        env->GCSR_ESTAT = deposit64(env->GCSR_ESTAT, 16, 15, val);
+    }
+
     return old_v;
 }
 
 target_ulong helper_csrwr_asid(CPULoongArchState *env, target_ulong val)
 {
-    int64_t old_v = GET_CSR(env, ASID);
+    int64_t old_v = env->CSR_ASID;
 
     /* Only ASID filed of CSR_ASID can be written */
-    SET_CSR(env, ASID, deposit64(env->CSR_ASID, 0, 10, val));
-    if (old_v != GET_CSR(env, ASID)) {
+    env->CSR_ASID = deposit64(env->CSR_ASID, 0, 10, val);
+    if (old_v != env->CSR_ASID) {
+        tlb_flush(env_cpu(env));
+    }
+    return old_v;
+}
+
+target_ulong helper_gcsrwr_asid(CPULoongArchState *env, target_ulong val)
+{
+    int64_t old_v = env->GCSR_ASID;
+
+    /* Only ASID filed of CSR_ASID can be written */
+    env->GCSR_ASID = deposit64(env->GCSR_ASID, 0, 10, val);
+    if (old_v != env->GCSR_ASID) {
         tlb_flush(env_cpu(env));
     }
     return old_v;
@@ -71,7 +115,7 @@ target_ulong helper_csrwr_asid(CPULoongArchState *env, target_ulong val)
 target_ulong helper_csrwr_tcfg(CPULoongArchState *env, target_ulong val)
 {
     LoongArchCPU *cpu = env_archcpu(env);
-    int64_t old_v = GET_CSR(env, TCFG);
+    int64_t old_v = env->CSR_TCFG;
 
     cpu_loongarch_store_constant_timer_config(cpu, val);
 
@@ -89,4 +133,18 @@ target_ulong helper_csrwr_ticlr(CPULoongArchState *env, target_ulong val)
         bql_unlock();
     }
     return old_v;
+}
+
+target_ulong helper_gspr_rd(CPUArchState* env)
+{
+    trigger_vm_exit(env);
+    do_raise_exception(env, EXCCODE_GSPR, GETPC());
+    return 0;
+}
+
+target_ulong helper_gspr_wr(CPUArchState* env, target_ulong tl)
+{
+    trigger_vm_exit(env);
+    do_raise_exception(env, EXCCODE_GSPR, GETPC());
+    return 0;
 }

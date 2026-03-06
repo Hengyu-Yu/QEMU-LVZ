@@ -249,4 +249,9 @@ void helper_hvcl(CPULoongArchState *env, uint32_t code)
     do_raise_exception(env, EXCCODE_HVC, GETPC());
 }
 
+void helper_gspr(CPULoongArchState *env) {
+    trigger_vm_exit(env);
+    do_raise_exception(env, EXCCODE_GSPR, GETPC());
+}
+
 
