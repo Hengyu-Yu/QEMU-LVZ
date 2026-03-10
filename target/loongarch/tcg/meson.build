@@ -16,5 +16,4 @@ loongarch_system_ss.add(files(
   'csr_helper.c',
   'iocsr_helper.c',
   'tlb_helper.c',
-  'lvz_helper.c',
 ))

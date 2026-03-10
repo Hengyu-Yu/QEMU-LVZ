@@ -18,6 +18,7 @@
 #endif
 #include "cpu-csr.h"
 #include "cpu-qom.h"
+#include "qemu/log.h"
 
 #define GET_CSR(env, csr_name) \
     ((env->guest_mode) ? (env->GCSR_##csr_name) : (env->CSR_##csr_name))
@@ -586,6 +587,7 @@ static inline bool will_return_to_guest(CPULoongArchState *env)
 
 static inline void trigger_vm_exit(CPULoongArchState *env)
 {
+    SET_CSR(env, GSTAT, FIELD_DP64(GET_CSR(env, GSTAT), CSR_GSTAT, PGM, 1));
     env->guest_mode = false;
 }
 

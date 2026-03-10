@@ -131,7 +131,10 @@ void helper_ertn(CPULoongArchState *env)
     SET_CSR(env, CRMD, FIELD_DP64(GET_CSR(env, CRMD), CSR_CRMD, IE, csr_pie));
 
     env->lladdr = 1;
-    if (will_return_to_guest(env)) env->guest_mode = true;
+    if (will_return_to_guest(env)) {
+        env->guest_mode = true;
+        qemu_log("Entering Guest Mode\n");
+    }
 }
 
 void helper_idle(CPULoongArchState *env)
@@ -140,6 +143,39 @@ void helper_idle(CPULoongArchState *env)
 
     cs->halted = 1;
     do_raise_exception(env, EXCP_HLT, 0);
+}
+
+
+/* Hypervisor call helper */
+void helper_hvcl(CPULoongArchState *env, uint32_t code)
+{
+    /* Check if we're in guest mode */
+    if (!is_guest_mode(env)) {
+        /* HVCL from host mode should be treated as illegal instruction */
+        do_raise_exception(env, EXCCODE_INE, GETPC());
+        return;
+    }
+
+    /* Check if LVZ capability is available */
+    if (!has_lvz_capability(env)) {
+        do_raise_exception(env, EXCCODE_INE, GETPC());
+        return;
+    }
+
+    /* Store the hypercall code for the hypervisor */
+    /* In a real implementation, this might be stored in a specific register
+     * or memory location that the hypervisor can access */
+
+    /* HVCL instruction causes a VM exit to hypervisor with hypercall reason */
+    qemu_log("%s: Exiting\n", __func__);
+    trigger_vm_exit(env);
+    do_raise_exception(env, EXCCODE_HVC, GETPC());
+}
+
+void helper_gspr(CPULoongArchState *env) {
+    qemu_log("%s: Exiting\n", __func__);
+    trigger_vm_exit(env);
+    do_raise_exception(env, EXCCODE_GSPR, GETPC());
 }
 
 #endif
