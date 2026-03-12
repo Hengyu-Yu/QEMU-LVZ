@@ -568,7 +568,10 @@ static inline bool is_guest_mode(CPULoongArchState *env)
 
 static inline uint8_t get_gid(CPULoongArchState *env)
 {
-    return FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, GID);
+    if (env->guest_mode) {
+        return FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, GID);
+    }
+    return 0;
 }
 
 static inline uint8_t get_tgid(CPULoongArchState *env)

@@ -82,7 +82,6 @@ static void raise_mmu_exception(CPULoongArchState *env, target_ulong address,
     CPUState *cs = env_cpu(env);
 
     if (env->guest_mode && tlb_error > TLBRET_HOST_MATCH) {
-        qemu_log("%s: Exiting\naddress: " TARGET_FMT_lx "\nerror: %d\n", __func__, address, tlb_error);
         trigger_vm_exit(env);
     }
 
@@ -194,7 +193,7 @@ static void invalidate_tlb(CPULoongArchState *env, int index, bool guest)
     LoongArchTLB *tlb;
     uint16_t csr_asid, tlb_asid, tlb_g;
 
-    csr_asid = FIELD_EX64(GET_CSR(env, ASID), CSR_ASID, ASID);
+    csr_asid = FIELD_EX64(guest ? env->GCSR_ASID : env->CSR_ASID, CSR_ASID, ASID);
     tlb = guest ? &env->gtlb[index] : &env->tlb[index];
     tlb_asid = FIELD_EX64(tlb->tlb_misc, TLB_MISC, ASID);
     tlb_g = FIELD_EX64(tlb->tlb_entry0, TLBENTRY, G);
@@ -244,11 +243,7 @@ static void fill_tlb_entry(CPULoongArchState *env, int index, bool guest)
     tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc, TLB_MISC, E, 1);
     csr_asid = FIELD_EX64(guest ? env->GCSR_ASID : env->CSR_ASID, CSR_ASID, ASID);
     tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc, TLB_MISC, ASID, csr_asid);
-
-    if (has_lvz_capability(env)) {
-        uint8_t gid = get_tgid(env);
-        tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc, TLB_MISC, GID, gid);
-    }
+    tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc, TLB_MISC, GID, get_tgid(env));
 
     tlb->tlb_entry0 = lo0;
     tlb->tlb_entry1 = lo1;
@@ -306,7 +301,7 @@ void helper_gtlbsrch(CPULoongArchState *env)
     }
 
     /* Search only in TLB entries that belong to current guest context */
-    match = loongarch_tlb_search(env, search_ehi, &index, env->guest_mode);
+    match = loongarch_tlb_search(env, search_ehi, &index, true);
 
     if (match) {
         env->GCSR_TLBIDX = FIELD_DP64(env->GCSR_TLBIDX, CSR_TLBIDX, INDEX, index);
@@ -834,6 +829,7 @@ bool loongarch_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
                             bool probe, uintptr_t retaddr)
 {
     CPULoongArchState *env = cpu_env(cs);
+    vaddr gpa;
     hwaddr physical;
     int prot;
     int ret;
@@ -842,7 +838,23 @@ bool loongarch_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
     ret = get_physical_address(env, &physical, &prot, address,
                                access_type, mmu_idx);
 
-    if (ret == TLBRET_MATCH || ret == TLBRET_HOST_MATCH) {
+    if (ret == TLBRET_MATCH) {
+        if (env->guest_mode) {
+            qemu_log("GVA->GPA: " TARGET_FMT_lx " " TARGET_FMT_lx "\n", address, physical);
+            gpa = physical;
+            ret = loongarch_map_host_address(env, &physical, &prot,
+                                           gpa, access_type, mmu_idx);
+            if (ret != TLBRET_HOST_MATCH) {
+                if (probe) {
+                    return false;
+                }
+                raise_mmu_exception(env, gpa, access_type, ret);
+                cpu_loop_exit_restore(cs, retaddr);
+                return false;
+            }
+            qemu_log("GPA->HPA: " TARGET_FMT_lx " " TARGET_FMT_lx "\n", gpa, physical);
+        }
+
         tlb_set_page(cs, address & TARGET_PAGE_MASK,
                      physical & TARGET_PAGE_MASK, prot,
                      mmu_idx, TARGET_PAGE_SIZE);
@@ -909,8 +921,8 @@ void helper_ldpte(CPULoongArchState *env, target_ulong base, target_ulong odd,
     CPUState *cs = env_cpu(env);
     target_ulong phys, tmp0, ptindex, ptoffset0, ptoffset1, ps, badv;
     int shift;
-    uint64_t ptbase = FIELD_EX64(env->CSR_PWCL, CSR_PWCL, PTBASE);
-    uint64_t ptwidth = FIELD_EX64(env->CSR_PWCL, CSR_PWCL, PTWIDTH);
+    uint64_t ptbase = FIELD_EX64(GET_CSR(env, PWCL), CSR_PWCL, PTBASE);
+    uint64_t ptwidth = FIELD_EX64(GET_CSR(env, PWCL), CSR_PWCL, PTWIDTH);
     uint64_t dir_base, dir_width;
 
     /*
@@ -969,5 +981,5 @@ void helper_ldpte(CPULoongArchState *env, target_ulong base, target_ulong odd,
     } else {
         SET_CSR(env, TLBRELO0, tmp0);
     }
-    SET_CSR(env, TLBREHI, FIELD_DP64(env->CSR_TLBREHI, CSR_TLBREHI, PS, ps));
+    SET_CSR(env, TLBREHI, FIELD_DP64(GET_CSR(env, TLBREHI), CSR_TLBREHI, PS, ps));
 }

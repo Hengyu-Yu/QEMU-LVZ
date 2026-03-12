@@ -133,7 +133,6 @@ void helper_ertn(CPULoongArchState *env)
     env->lladdr = 1;
     if (will_return_to_guest(env)) {
         env->guest_mode = true;
-        qemu_log("Entering Guest Mode\n");
     }
 }
 
@@ -167,7 +166,6 @@ void helper_hvcl(CPULoongArchState *env, uint32_t code)
      * or memory location that the hypervisor can access */
 
     /* HVCL instruction causes a VM exit to hypervisor with hypercall reason */
-    qemu_log("%s: Exiting\n", __func__);
     trigger_vm_exit(env);
     do_raise_exception(env, EXCCODE_HVC, GETPC());
 }

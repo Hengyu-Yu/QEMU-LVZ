@@ -136,7 +136,7 @@ void loongarch_cpu_set_irq(void *opaque, int irq, int level)
     if (kvm_enabled()) {
         kvm_loongarch_set_interrupt(cpu, irq, level);
     } else if (tcg_enabled()) {
-        SET_CSR(env, ESTAT, deposit64(env->CSR_ESTAT, irq, 1, level != 0));
+        SET_CSR(env, ESTAT, deposit64(GET_CSR(env, ESTAT), irq, 1, level != 0));
         if (FIELD_EX64(GET_CSR(env, ESTAT), CSR_ESTAT, IS)) {
             cpu_interrupt(cs, CPU_INTERRUPT_HARD);
         } else {
@@ -219,6 +219,7 @@ static void loongarch_cpu_do_interrupt(CPUState *cs)
     case EXCCODE_GSPR:
     case EXCCODE_GCHC:
     case EXCCODE_GCSC:
+    case EXCCODE_HVC:
         SET_CSR(env, BADV, env->pc);
         QEMU_FALLTHROUGH;
     case EXCCODE_BCE:
@@ -230,17 +231,6 @@ static void loongarch_cpu_do_interrupt(CPUState *cs)
     case EXCCODE_PNX:
     case EXCCODE_PPI:
         cause = cs->exception_index;
-        break;
-    case EXCCODE_HVC:
-        /* Hypervisor call exception */
-        if (is_guest_mode(env)) {
-            /* Guest mode HVC - exit to hypervisor */
-            env->CSR_BADV = env->pc;
-            cause = cs->exception_index;
-        } else {
-            /* Host mode HVC - treat as instruction non-existent */
-            cause = EXCCODE_INE;
-        }
         break;
     default:
         qemu_log("Error: exception(%d) has not been supported\n",
@@ -593,84 +583,6 @@ static void loongarch_cpu_reset_hold(Object *obj, ResetType type)
     env->CSR_GCNTC = 0;
     env->CSR_GTLBC = 0;
     env->CSR_TRGP = 0;
-
-    /* Initialize guest CSRs to match host CSRs initially */
-    env->GCSR_CRMD = env->CSR_CRMD;
-    env->GCSR_PRMD = env->CSR_PRMD;
-    env->GCSR_EUEN = env->CSR_EUEN;
-    env->GCSR_MISC = env->CSR_MISC;
-    env->GCSR_ECFG = env->CSR_ECFG;
-    env->GCSR_ESTAT = env->CSR_ESTAT;
-    env->GCSR_ERA = env->CSR_ERA;
-    env->GCSR_BADV = env->CSR_BADV;
-    env->GCSR_BADI = env->CSR_BADI;
-    env->GCSR_EENTRY = env->CSR_EENTRY;
-
-    /* Initialize guest TLB-related CSRs */
-    env->GCSR_TLBIDX = env->CSR_TLBIDX;
-    env->GCSR_TLBEHI = env->CSR_TLBEHI;
-    env->GCSR_TLBELO0 = env->CSR_TLBELO0;
-    env->GCSR_TLBELO1 = env->CSR_TLBELO1;
-    env->GCSR_ASID = env->CSR_ASID;
-    env->GCSR_PGDL = env->CSR_PGDL;
-    env->GCSR_PGDH = env->CSR_PGDH;
-    env->GCSR_PGD = env->CSR_PGD;
-    env->GCSR_PWCL = env->CSR_PWCL;
-    env->GCSR_PWCH = env->CSR_PWCH;
-    env->GCSR_STLBPS = env->CSR_STLBPS;
-    env->GCSR_RVACFG = env->CSR_RVACFG;
-
-    /* Initialize guest config CSRs */
-    env->GCSR_CPUID = env->CSR_CPUID;
-    env->GCSR_PRCFG1 = env->CSR_PRCFG1;
-    env->GCSR_PRCFG2 = env->CSR_PRCFG2;
-    env->GCSR_PRCFG3 = env->CSR_PRCFG3;
-
-    /* Initialize guest SAVE registers */
-    for (n = 0; n < 16; n++) {
-        env->GCSR_SAVE[n] = env->CSR_SAVE[n];
-    }
-
-    /* Initialize guest timer CSRs */
-    env->GCSR_TID = env->CSR_TID;
-    env->GCSR_TCFG = env->CSR_TCFG;
-    env->GCSR_TVAL = env->CSR_TVAL;
-    env->GCSR_CNTC = env->CSR_CNTC;
-    env->GCSR_TICLR = env->CSR_TICLR;
-    env->GCSR_LLBCTL = env->CSR_LLBCTL;
-
-    /* Initialize guest implementation-specific CSRs */
-    env->GCSR_IMPCTL1 = env->CSR_IMPCTL1;
-    env->GCSR_IMPCTL2 = env->CSR_IMPCTL2;
-
-    /* Initialize guest TLB refill CSRs */
-    env->GCSR_TLBRENTRY = env->CSR_TLBRENTRY;
-    env->GCSR_TLBRBADV = env->CSR_TLBRBADV;
-    env->GCSR_TLBRERA = env->CSR_TLBRERA;
-    env->GCSR_TLBRSAVE = env->CSR_TLBRSAVE;
-    env->GCSR_TLBRELO0 = env->CSR_TLBRELO0;
-    env->GCSR_TLBRELO1 = env->CSR_TLBRELO1;
-    env->GCSR_TLBREHI = env->CSR_TLBREHI;
-    env->GCSR_TLBRPRMD = env->CSR_TLBRPRMD;
-
-    /* Initialize guest machine error CSRs */
-    env->GCSR_MERRCTL = env->CSR_MERRCTL;
-    env->GCSR_MERRINFO1 = env->CSR_MERRINFO1;
-    env->GCSR_MERRINFO2 = env->CSR_MERRINFO2;
-    env->GCSR_MERRENTRY = env->CSR_MERRENTRY;
-    env->GCSR_MERRERA = env->CSR_MERRERA;
-    env->GCSR_MERRSAVE = env->CSR_MERRSAVE;
-    env->GCSR_CTAG = env->CSR_CTAG;
-
-    /* Initialize guest DMW registers */
-    for (n = 0; n < 4; n++) {
-        env->GCSR_DMW[n] = env->CSR_DMW[n];
-    }
-
-    /* Initialize guest debug CSRs */
-    env->GCSR_DBG = env->CSR_DBG;
-    env->GCSR_DERA = env->CSR_DERA;
-    env->GCSR_DSAVE = env->CSR_DSAVE;
 
     env->gtlb = &env->tlb[LOONGARCH_TLB_MAX];
     env->guest_mode = false;
