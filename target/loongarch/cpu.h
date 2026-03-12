@@ -593,6 +593,8 @@ static inline void trigger_vm_exit(CPULoongArchState *env)
     env->guest_mode = false;
 }
 
+void do_gspr(CPULoongArchState *env);
+
 void loongarch_cpu_post_init(Object *obj);
 
 #endif /* LOONGARCH_CPU_H */

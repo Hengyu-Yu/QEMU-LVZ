@@ -112,6 +112,14 @@ static vaddr loongarch_cpu_get_pc(CPUState *cs)
     return cpu_env(cs)->pc;
 }
 
+void do_gspr(CPULoongArchState* env)
+{
+    qemu_log("%s: Exiting\n", __func__);
+    trigger_vm_exit(env);
+    do_raise_exception(env, EXCCODE_GSPR, GETPC());
+}
+
+
 #ifndef CONFIG_USER_ONLY
 #include "hw/loongarch/virt.h"
 

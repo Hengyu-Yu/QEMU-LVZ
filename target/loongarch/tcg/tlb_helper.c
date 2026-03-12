@@ -82,7 +82,7 @@ static void raise_mmu_exception(CPULoongArchState *env, target_ulong address,
     CPUState *cs = env_cpu(env);
 
     if (env->guest_mode && tlb_error > TLBRET_HOST_MATCH) {
-        qemu_log("%s: Exiting\n address: " TARGET_FMT_lx "\nerror: %d\n", __func__, address, tlb_error);
+        qemu_log("%s: Exiting\naddress: " TARGET_FMT_lx "\nerror: %d\n", __func__, address, tlb_error);
         trigger_vm_exit(env);
     }
 

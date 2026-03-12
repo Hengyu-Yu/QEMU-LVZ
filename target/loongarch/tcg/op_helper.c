@@ -83,7 +83,7 @@ target_ulong helper_crc32c(target_ulong val, target_ulong m, uint64_t sz)
 target_ulong helper_cpucfg(CPULoongArchState *env, target_ulong rj)
 {
     if (env->guest_mode) {
-        do_raise_exception(env, EXCCODE_GSPR, GETPC());
+        do_gspr(env);
     }
     return rj >= ARRAY_SIZE(env->cpucfg) ? 0 : env->cpucfg[rj];
 }
@@ -173,9 +173,7 @@ void helper_hvcl(CPULoongArchState *env, uint32_t code)
 }
 
 void helper_gspr(CPULoongArchState *env) {
-    qemu_log("%s: Exiting\n", __func__);
-    trigger_vm_exit(env);
-    do_raise_exception(env, EXCCODE_GSPR, GETPC());
+    do_gspr(env);
 }
 
 #endif
