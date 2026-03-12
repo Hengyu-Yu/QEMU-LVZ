@@ -664,6 +664,7 @@ static void loongarch_cpu_reset_hold(Object *obj, ResetType type)
     env->GCSR_DERA = env->CSR_DERA;
     env->GCSR_DSAVE = env->CSR_DSAVE;
 
+    env->gtlb = &env->tlb[LOONGARCH_TLB_MAX];
     env->guest_mode = false;
 #endif
 

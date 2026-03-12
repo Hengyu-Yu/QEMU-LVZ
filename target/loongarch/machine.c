@@ -135,7 +135,7 @@ static const VMStateDescription vmstate_tlb = {
     .minimum_version_id = 0,
     .needed = tlb_needed,
     .fields = (const VMStateField[]) {
-        VMSTATE_STRUCT_ARRAY(env.tlb, LoongArchCPU, LOONGARCH_TLB_MAX,
+        VMSTATE_STRUCT_ARRAY(env.tlb, LoongArchCPU, LOONGARCH_TLB_AND_GTLB_MAX,
                              0, vmstate_tlb_entry, LoongArchTLB),
         VMSTATE_END_OF_LIST()
     }

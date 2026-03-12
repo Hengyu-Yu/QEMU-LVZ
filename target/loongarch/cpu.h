@@ -257,6 +257,7 @@ extern const char * const fregnames[32];
 #define LOONGARCH_STLB         2048 /* 2048 STLB */
 #define LOONGARCH_MTLB         64   /* 64 MTLB */
 #define LOONGARCH_TLB_MAX      (LOONGARCH_STLB + LOONGARCH_MTLB)
+#define LOONGARCH_TLB_AND_GTLB_MAX (LOONGARCH_TLB_MAX * 2)
 
 /*
  * define the ASID PS E VPPN field of TLB
@@ -444,7 +445,8 @@ typedef struct CPUArchState {
 #endif
 #ifndef CONFIG_USER_ONLY
 #ifdef CONFIG_TCG
-    LoongArchTLB  tlb[LOONGARCH_TLB_MAX], gtlb[LOONGARCH_TLB_MAX];
+    LoongArchTLB tlb[LOONGARCH_TLB_AND_GTLB_MAX];
+    LoongArchTLB *gtlb;
 #endif
 
     AddressSpace *address_space_iocsr;
