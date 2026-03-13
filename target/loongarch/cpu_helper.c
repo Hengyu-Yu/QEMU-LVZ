@@ -48,6 +48,10 @@ static int loongarch_map_tlb_entry(CPULoongArchState *env, hwaddr *physical,
         tlb_rplv = 0;
     }
 
+    if (address == 0x10000) {
+        qemu_log("Original PPN and PS: " TARGET_FMT_lx " %d\n", tlb_ppn, tlb_ps);
+    }
+
     /* Remove sw bit between bit12 -- bit PS*/
     tlb_ppn = tlb_ppn & ~(((0x1UL << (tlb_ps - 12)) -1));
 
@@ -75,6 +79,11 @@ static int loongarch_map_tlb_entry(CPULoongArchState *env, hwaddr *physical,
 
     *physical = (tlb_ppn << R_TLBENTRY_64_PPN_SHIFT) |
                 (address & MAKE_64BIT_MASK(0, tlb_ps));
+
+    if (address == 0x10000) {
+        qemu_log("New PPN and paddr: " TARGET_FMT_lx " " TARGET_FMT_lx "\n", tlb_ppn, *physical);
+    }
+
     *prot = PAGE_READ;
     if (tlb_d) {
         *prot |= PAGE_WRITE;
@@ -210,12 +219,26 @@ static hwaddr dmw_va2pa(CPULoongArchState *env, target_ulong va,
     }
 }
 
+static int get_guest_cpu_mmu_index(CPULoongArchState *env)
+{
+    if (FIELD_EX64(env->GCSR_CRMD, CSR_CRMD, PG)) {
+        return FIELD_EX64(env->GCSR_CRMD, CSR_CRMD, PLV);
+    }
+    return MMU_DA_IDX;
+}
+
 int get_physical_address(CPULoongArchState *env, hwaddr *physical,
                          int *prot, target_ulong address,
                          MMUAccessType access_type, int mmu_idx)
 {
-    int user_mode = mmu_idx == MMU_USER_IDX;
-    int kernel_mode = mmu_idx == MMU_KERNEL_IDX;
+    int user_mode, kernel_mode;
+    if (env->guest_mode) {
+        user_mode = get_guest_cpu_mmu_index(env) == MMU_USER_IDX;
+        kernel_mode = get_guest_cpu_mmu_index(env) == MMU_KERNEL_IDX;
+    } else {
+        user_mode = mmu_idx == MMU_USER_IDX;
+        kernel_mode = mmu_idx == MMU_KERNEL_IDX;
+    }
     uint32_t plv, base_c, base_v;
     int64_t addr_high;
     uint8_t da, pg;

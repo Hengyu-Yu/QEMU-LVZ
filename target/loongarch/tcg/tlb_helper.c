@@ -247,6 +247,9 @@ static void fill_tlb_entry(CPULoongArchState *env, int index, bool guest)
 
     tlb->tlb_entry0 = lo0;
     tlb->tlb_entry1 = lo1;
+    if (guest) {
+        qemu_log(TARGET_FMT_lx " " TARGET_FMT_lx "\n", lo0, lo1);
+    }
 }
 
 /* Return an random value between low and high */
@@ -322,7 +325,7 @@ void helper_tlbrd(CPULoongArchState *env)
     tlb = env->guest_mode ? &env->gtlb[index] : &env->tlb[index];
 
     /* Check if TLB entry belongs to current guest context */
-    if (!tlb_entry_matches_guest(env, tlb)) {
+    if ((!tlb_entry_matches_gid(tlb, get_tgid(env))) && env->guest_mode) {
         /* Invalid TLB entry for current guest */
         SET_CSR(env, TLBIDX, FIELD_DP64(GET_CSR(env, TLBIDX), CSR_TLBIDX, NE, 1));
         SET_CSR(env, ASID, FIELD_DP64(GET_CSR(env, ASID), CSR_ASID, ASID, 0));
@@ -536,7 +539,7 @@ void helper_tlbclr(CPULoongArchState *env)
             tlb = env->guest_mode ? &env->gtlb[i * 256 + (index % 256)] : &env->tlb[i * 256 + (index % 256)];
 
             /* Only clear entries belonging to current guest */
-            if (!tlb_entry_matches_guest(env, tlb)) {
+            if ((!tlb_entry_matches_gid(tlb, get_tgid(env))) && env->guest_mode) {
                 continue;
             }
 
@@ -552,7 +555,7 @@ void helper_tlbclr(CPULoongArchState *env)
             tlb = env->guest_mode ? &env->gtlb[i] : &env->tlb[i];
 
             /* Only clear entries belonging to current guest */
-            if (!tlb_entry_matches_guest(env, tlb)) {
+            if ((!tlb_entry_matches_gid(tlb, get_tgid(env))) && env->guest_mode) {
                 continue;
             }
 
@@ -633,7 +636,7 @@ void helper_tlbflush(CPULoongArchState *env)
             tlb = env->guest_mode ? &env->gtlb[s_idx] : &env->tlb[s_idx];
 
             /* Only flush entries belonging to current guest */
-            if (tlb_entry_matches_guest(env, tlb)) {
+            if ((tlb_entry_matches_gid(tlb, get_tgid(env))) || env->guest_mode == 0) {
                 tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc,
                                                       TLB_MISC, E, 0);
             }
@@ -643,7 +646,7 @@ void helper_tlbflush(CPULoongArchState *env)
         for (i = LOONGARCH_STLB; i < LOONGARCH_TLB_MAX; i++) {
             tlb = env->guest_mode ? &env->gtlb[i] : &env->tlb[i];
             /* Only flush entries belonging to current guest */
-            if (tlb_entry_matches_guest(env, tlb)) {
+            if ((tlb_entry_matches_gid(tlb, get_tgid(env))) || env->guest_mode == 0) {
                 tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc,
                                                   TLB_MISC, E, 0);
             }
@@ -982,4 +985,6 @@ void helper_ldpte(CPULoongArchState *env, target_ulong base, target_ulong odd,
         SET_CSR(env, TLBRELO0, tmp0);
     }
     SET_CSR(env, TLBREHI, FIELD_DP64(GET_CSR(env, TLBREHI), CSR_TLBREHI, PS, ps));
+    if (env->guest_mode)
+        qemu_log("LDPTE: " TARGET_FMT_lx " " TARGET_FMT_lx "\n", GET_CSR(env, TLBREHI), tmp0);
 }

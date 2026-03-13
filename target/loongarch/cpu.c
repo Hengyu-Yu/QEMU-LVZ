@@ -114,7 +114,6 @@ static vaddr loongarch_cpu_get_pc(CPUState *cs)
 
 void do_gspr(CPULoongArchState* env)
 {
-    qemu_log("%s: Exiting\n", __func__);
     trigger_vm_exit(env);
     do_raise_exception(env, EXCCODE_GSPR, GETPC());
 }

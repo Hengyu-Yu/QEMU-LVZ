@@ -207,7 +207,7 @@ static const CSRInfo gcsr_info[] = {
     GCSR_OFF_FUNCS(ASID, CSRFL_EXITTB, NULL, gen_helper_gcsrwr_asid),
     GCSR_OFF(PGDL),
     GCSR_OFF(PGDH),
-    GCSR_OFF_FUNCS(PGD, CSRFL_GUEST_READONLY, gen_helper_csrrd_pgd, NULL),
+    GCSR_OFF_FUNCS(PGD, CSRFL_GUEST_READONLY, gen_helper_gcsrrd_pgd, NULL),
     GCSR_OFF(PWCL),
     GCSR_OFF(PWCH),
     GCSR_OFF(STLBPS),
