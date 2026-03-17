@@ -435,7 +435,7 @@ typedef struct CPUArchState {
     uint64_t GCSR_GTLBC;
     uint64_t GCSR_TRGP;
 
-    bool guest_mode;
+    bool guest_mode, vm_exit;
 
 #ifdef CONFIG_TCG
     float_status fp_status;
@@ -594,9 +594,8 @@ static inline void trigger_vm_exit(CPULoongArchState *env)
 {
     SET_CSR(env, GSTAT, FIELD_DP64(GET_CSR(env, GSTAT), CSR_GSTAT, PGM, 1));
     env->guest_mode = false;
+    env->vm_exit = true;
 }
-
-void do_gspr(CPULoongArchState *env);
 
 void loongarch_cpu_post_init(Object *obj);
 

@@ -112,13 +112,6 @@ static vaddr loongarch_cpu_get_pc(CPUState *cs)
     return cpu_env(cs)->pc;
 }
 
-void do_gspr(CPULoongArchState* env)
-{
-    trigger_vm_exit(env);
-    do_raise_exception(env, EXCCODE_GSPR, GETPC());
-}
-
-
 #ifndef CONFIG_USER_ONLY
 #include "hw/loongarch/virt.h"
 
@@ -176,6 +169,7 @@ static void loongarch_cpu_do_interrupt(CPUState *cs)
     int cause = -1;
     bool tlbfill = FIELD_EX64(GET_CSR(env, TLBRERA), CSR_TLBRERA, ISTLBR);
     uint32_t vec_size = FIELD_EX64(GET_CSR(env, ECFG), CSR_ECFG, VS);
+    uint32_t badinstr;
 
     if (cs->exception_index != EXCCODE_INT) {
         qemu_log_mask(CPU_LOG_INT,
@@ -238,7 +232,8 @@ static void loongarch_cpu_do_interrupt(CPUState *cs)
     }
 
     if (update_badinstr) {
-        SET_CSR(env, BADI, cpu_ldl_code(env, env->pc));
+        badinstr = cpu_ldl_code(env, env->pc);
+        SET_CSR(env, BADI, badinstr);
     }
 
     /* Save PLV and IE */
@@ -310,6 +305,7 @@ static void loongarch_cpu_do_interrupt(CPUState *cs)
                       GET_CSR(env, ASID), env->guest_mode);
     }
     cs->exception_index = -1;
+    env->vm_exit = false;
 }
 
 static void loongarch_cpu_do_transaction_failed(CPUState *cs, hwaddr physaddr,

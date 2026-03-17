@@ -247,9 +247,6 @@ static void fill_tlb_entry(CPULoongArchState *env, int index, bool guest)
 
     tlb->tlb_entry0 = lo0;
     tlb->tlb_entry1 = lo1;
-    if (guest) {
-        qemu_log(TARGET_FMT_lx " " TARGET_FMT_lx "\n", lo0, lo1);
-    }
 }
 
 /* Return an random value between low and high */
@@ -843,7 +840,7 @@ bool loongarch_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
 
     if (ret == TLBRET_MATCH) {
         if (env->guest_mode) {
-            qemu_log("GVA->GPA: " TARGET_FMT_lx " " TARGET_FMT_lx "\n", address, physical);
+            qemu_log("GVA->GPA: " TARGET_FMT_lx " " TARGET_FMT_lx " %d\n", address, physical, access_type);
             gpa = physical;
             ret = loongarch_map_host_address(env, &physical, &prot,
                                            gpa, access_type, mmu_idx);
@@ -855,7 +852,7 @@ bool loongarch_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
                 cpu_loop_exit_restore(cs, retaddr);
                 return false;
             }
-            qemu_log("GPA->HPA: " TARGET_FMT_lx " " TARGET_FMT_lx "\n", gpa, physical);
+            qemu_log("GPA->HPA: " TARGET_FMT_lx " " TARGET_FMT_lx " %d\n", gpa, physical, access_type);
         }
 
         tlb_set_page(cs, address & TARGET_PAGE_MASK,
@@ -875,6 +872,22 @@ bool loongarch_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
     }
     raise_mmu_exception(env, address, access_type, ret);
     cpu_loop_exit_restore(cs, retaddr);
+}
+
+static inline hwaddr loongarch_get_host_address(CPULoongArchState *env, target_ulong gpa)
+{
+    hwaddr physical = 0;
+    int prot, ret;
+
+    ret = loongarch_map_host_address(env, &physical, &prot, gpa, MMU_DATA_LOAD,
+                             MMU_KERNEL_IDX);
+
+    if (ret != TLBRET_HOST_MATCH) {
+        raise_mmu_exception(env, gpa, MMU_DATA_LOAD, ret);
+        cpu_loop_exit_restore(env_cpu(env), GETPC());
+    }
+
+    return physical;
 }
 
 target_ulong helper_lddir(CPULoongArchState *env, target_ulong base,
@@ -914,7 +927,11 @@ target_ulong helper_lddir(CPULoongArchState *env, target_ulong base,
     get_dir_base_width(env, &dir_base, &dir_width, level);
     index = (badvaddr >> dir_base) & ((1 << dir_width) - 1);
     phys = base | index << shift;
-    ret = ldq_phys(cs->as, phys) & TARGET_PHYS_MASK;
+    if (env->guest_mode) {
+        ret = ldq_phys(cs->as, loongarch_get_host_address(env, phys)) & TARGET_PHYS_MASK;
+    } else {
+        ret = ldq_phys(cs->as, phys) & TARGET_PHYS_MASK;
+    }
     return ret;
 }
 
@@ -975,7 +992,11 @@ void helper_ldpte(CPULoongArchState *env, target_ulong base, target_ulong odd,
         ptoffset1 = (ptindex + 1) << shift;
 
         phys = base | (odd ? ptoffset1 : ptoffset0);
-        tmp0 = ldq_phys(cs->as, phys) & TARGET_PHYS_MASK;
+        if (env->guest_mode) {
+            tmp0 = ldq_phys(cs->as, loongarch_get_host_address(env, phys)) & TARGET_PHYS_MASK;
+        } else {
+            tmp0 = ldq_phys(cs->as, phys) & TARGET_PHYS_MASK;
+        }
         ps = ptbase;
     }
 
@@ -985,6 +1006,4 @@ void helper_ldpte(CPULoongArchState *env, target_ulong base, target_ulong odd,
         SET_CSR(env, TLBRELO0, tmp0);
     }
     SET_CSR(env, TLBREHI, FIELD_DP64(GET_CSR(env, TLBREHI), CSR_TLBREHI, PS, ps));
-    if (env->guest_mode)
-        qemu_log("LDPTE: " TARGET_FMT_lx " " TARGET_FMT_lx "\n", GET_CSR(env, TLBREHI), tmp0);
 }

@@ -48,10 +48,6 @@ static int loongarch_map_tlb_entry(CPULoongArchState *env, hwaddr *physical,
         tlb_rplv = 0;
     }
 
-    if (address == 0x10000) {
-        qemu_log("Original PPN and PS: " TARGET_FMT_lx " %d\n", tlb_ppn, tlb_ps);
-    }
-
     /* Remove sw bit between bit12 -- bit PS*/
     tlb_ppn = tlb_ppn & ~(((0x1UL << (tlb_ps - 12)) -1));
 
@@ -79,10 +75,6 @@ static int loongarch_map_tlb_entry(CPULoongArchState *env, hwaddr *physical,
 
     *physical = (tlb_ppn << R_TLBENTRY_64_PPN_SHIFT) |
                 (address & MAKE_64BIT_MASK(0, tlb_ps));
-
-    if (address == 0x10000) {
-        qemu_log("New PPN and paddr: " TARGET_FMT_lx " " TARGET_FMT_lx "\n", tlb_ppn, *physical);
-    }
 
     *prot = PAGE_READ;
     if (tlb_d) {
@@ -250,6 +242,10 @@ int get_physical_address(CPULoongArchState *env, hwaddr *physical,
         *physical = address & TARGET_PHYS_MASK;
         *prot = PAGE_READ | PAGE_WRITE | PAGE_EXEC;
         return TLBRET_MATCH;
+    }
+
+    if (env->guest_mode) {
+        qemu_log("TRY: %016lx\n", address);
     }
 
     plv = kernel_mode | (user_mode << R_CSR_DMW_PLV3_SHIFT);

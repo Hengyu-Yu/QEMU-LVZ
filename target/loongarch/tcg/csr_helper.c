@@ -137,14 +137,14 @@ target_ulong helper_csrwr_ticlr(CPULoongArchState *env, target_ulong val)
 
 target_ulong helper_gspr_rd(CPUArchState* env)
 {
-    qemu_log("%s: Exiting\n", __func__);
-    do_gspr(env);
+    trigger_vm_exit(env);
+    do_raise_exception(env, EXCCODE_GSPR, GETPC());
     return 0;
 }
 
 target_ulong helper_gspr_wr(CPUArchState* env, target_ulong tl)
 {
-    qemu_log("%s: Exiting\n", __func__);
-    do_gspr(env);
+    trigger_vm_exit(env);
+    do_raise_exception(env, EXCCODE_GSPR, GETPC());
     return 0;
 }

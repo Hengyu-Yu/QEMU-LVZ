@@ -67,6 +67,7 @@ enum {
     CSRFL_EXITTB   = (1 << 1),
     CSRFL_IO       = (1 << 2),
     CSRFL_GUEST_READONLY = (1 << 3),
+    CSRFL_GSPR     = (1 << 4),
 };
 
 #define CSR_OFF_FUNCS(NAME, FL, RD, WR)                     \
@@ -106,7 +107,7 @@ enum {
     GCSR_OFF_FLAGS(NAME, 0)
 
 #define GCSR_GSPR(NAME) \
-    GCSR_OFF_FUNCS(NAME, 0, gen_helper_gspr_rd, gen_helper_gspr_wr)
+    GCSR_OFF_FUNCS(NAME, CSRFL_GSPR, gen_helper_gspr_rd, gen_helper_gspr_wr)
 
 static const CSRInfo csr_info[] = {
     CSR_OFF_FLAGS(CRMD, CSRFL_EXITTB),
@@ -413,16 +414,17 @@ static bool trans_csrxchg(DisasContext *ctx, arg_csrxchg *a)
         return false;
     }
 
-    /* So far only readonly csrs have readfn. */
-    assert(csr->readfn == NULL);
-
     src1 = gpr_src(ctx, a->rd, EXT_NONE);
     mask = gpr_src(ctx, a->rj, EXT_NONE);
     oldv = tcg_temp_new();
     newv = tcg_temp_new();
     temp = tcg_temp_new();
 
-    tcg_gen_ld_tl(oldv, tcg_env, csr->offset);
+    if (csr->readfn) {
+        csr->readfn(oldv, tcg_env);
+    } else {
+        tcg_gen_ld_tl(oldv, tcg_env, csr->offset);
+    }
     tcg_gen_and_tl(newv, src1, mask);
     tcg_gen_andc_tl(temp, oldv, mask);
     tcg_gen_or_tl(newv, newv, temp);
@@ -444,6 +446,8 @@ static bool gen_iocsrrd(DisasContext *ctx, arg_rr *a,
 
     if (ctx->guest_mode) {
         gen_helper_gspr(tcg_env);
+        ctx->base.is_jmp = DISAS_NORETURN;
+        return true;
     }
 
     if (check_plv(ctx)) {
@@ -461,6 +465,8 @@ static bool gen_iocsrwr(DisasContext *ctx, arg_rr *a,
 
     if (ctx->guest_mode) {
         gen_helper_gspr(tcg_env);
+        ctx->base.is_jmp = DISAS_NORETURN;
+        return true;
     }
 
     if (check_plv(ctx)) {
@@ -666,6 +672,11 @@ static bool trans_dbcl(DisasContext *ctx, arg_dbcl *a)
     if (check_plv(ctx)) {
         return false;
     }
+    if (ctx->guest_mode) {
+        gen_helper_gspr(tcg_env);
+        ctx->base.is_jmp = DISAS_NORETURN;
+        return true;
+    }
     generate_exception(ctx, EXCCODE_DBP);
     return true;
 }
@@ -674,6 +685,12 @@ static bool trans_idle(DisasContext *ctx, arg_idle *a)
 {
     if (check_plv(ctx)) {
         return false;
+    }
+
+    if (ctx->guest_mode) {
+        gen_helper_gspr(tcg_env);
+        ctx->base.is_jmp = DISAS_NORETURN;
+        return true;
     }
 
     tcg_gen_movi_tl(cpu_pc, ctx->base.pc_next + 4);
@@ -704,7 +721,9 @@ static bool trans_gcsrrd(DisasContext *ctx, arg_gcsrrd *a)
     } else {
         check_csr_flags(ctx, csr, false);
         dest = gpr_dst(ctx, a->rd, EXT_NONE);
-        if (csr->readfn) {
+        if ((csr->flags & CSRFL_GSPR)) {
+            tcg_gen_movi_tl(dest, 0);
+        } else if (csr->readfn) {
             csr->readfn(dest, tcg_env);
         } else {
             tcg_gen_ld_tl(dest, tcg_env, csr->offset);
@@ -738,11 +757,12 @@ static bool trans_gcsrwr(DisasContext *ctx, arg_gcsrwr *a)
         return false;
     }
     src1 = gpr_src(ctx, a->rd, EXT_NONE);
-    if (csr->writefn) {
-        dest = gpr_dst(ctx, a->rd, EXT_NONE);
+    dest = tcg_temp_new();
+    if ((csr->flags & CSRFL_GSPR)) {
+        tcg_gen_movi_tl(dest, 0);
+    } else if (csr->writefn) {
         csr->writefn(dest, tcg_env, src1);
     } else {
-        dest = tcg_temp_new();
         tcg_gen_ld_tl(dest, tcg_env, csr->offset);
         tcg_gen_st_tl(src1, tcg_env, csr->offset);
     }
@@ -774,21 +794,27 @@ static bool trans_gcsrxchg(DisasContext *ctx, arg_gcsrxchg *a)
         return false;
     }
 
-    /* So far only readonly csrs have readfn. */
-    assert(csr->readfn == NULL);
-
     src1 = gpr_src(ctx, a->rd, EXT_NONE);
     mask = gpr_src(ctx, a->rj, EXT_NONE);
     oldv = tcg_temp_new();
     newv = tcg_temp_new();
     temp = tcg_temp_new();
 
-    tcg_gen_ld_tl(oldv, tcg_env, csr->offset);
+    if ((csr->flags & CSRFL_GSPR)) {
+        tcg_gen_movi_tl(oldv, 0);
+    } else if (csr->readfn) {
+        csr->readfn(oldv, tcg_env);
+    } else {
+        tcg_gen_ld_tl(oldv, tcg_env, csr->offset);
+    }
     tcg_gen_and_tl(newv, src1, mask);
     tcg_gen_andc_tl(temp, oldv, mask);
     tcg_gen_or_tl(newv, newv, temp);
 
-    if (csr->writefn) {
+
+    if ((csr->flags & CSRFL_GSPR)) {
+        tcg_gen_movi_tl(oldv, 0);
+    } if (csr->writefn) {
         csr->writefn(oldv, tcg_env, newv);
     } else {
         tcg_gen_st_tl(newv, tcg_env, csr->offset);
@@ -910,7 +936,7 @@ static bool trans_hvcl(DisasContext *ctx, arg_hvcl *a)
     
     /* Hypervisor call instruction */
     gen_helper_hvcl(tcg_env, tcg_constant_i32(a->imm));
-    ctx->base.is_jmp = DISAS_EXIT;
+    ctx->base.is_jmp = DISAS_NORETURN;
     return true;
 }
 
