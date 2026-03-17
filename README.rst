@@ -31,6 +31,24 @@ QEMU as a whole is released under the GNU General Public License,
 version 2. For full licensing details, consult the LICENSE file.
 
 
+QEMU-LVZ 项目简介
+===================
+
+QEMU-LVZ 是基于 QEMU 的 LoongArch 虚拟化扩展分支，聚焦于 LVZ（LoongArch
+Virtualization）能力与 KVM 加速路径的协同实现。
+
+主要特点包括：
+
+* 面向 LoongArch 的 CPU 与虚拟化能力扩展（含 LVZ 相关特性）；
+* 复用 QEMU 通用能力（设备模型、管理接口与构建体系）；
+* 通过 KVM 获得接近原生性能，并在架构层处理中断、寄存器同步和
+  LoongArch 特定 VM-Exit（如 IOCSR）。
+
+代码结构上，项目采用“通用 KVM 层（``accel/kvm``）+ LoongArch 架构适配层
+（``target/loongarch`` 与 ``target/loongarch/kvm``）”的方式实现。
+
+
+
 Documentation
 =============
 
