@@ -811,7 +811,6 @@ static bool trans_gcsrxchg(DisasContext *ctx, arg_gcsrxchg *a)
     tcg_gen_andc_tl(temp, oldv, mask);
     tcg_gen_or_tl(newv, newv, temp);
 
-
     if ((csr->flags & CSRFL_GSPR)) {
         tcg_gen_movi_tl(oldv, 0);
     } if (csr->writefn) {
