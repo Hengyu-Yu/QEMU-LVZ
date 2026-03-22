@@ -840,7 +840,6 @@ bool loongarch_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
 
     if (ret == TLBRET_MATCH) {
         if (env->guest_mode) {
-            qemu_log("GVA->GPA: " TARGET_FMT_lx " " TARGET_FMT_lx " %d\n", address, physical, access_type);
             gpa = physical;
             ret = loongarch_map_host_address(env, &physical, &prot,
                                            gpa, access_type, mmu_idx);
@@ -852,7 +851,6 @@ bool loongarch_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
                 cpu_loop_exit_restore(cs, retaddr);
                 return false;
             }
-            qemu_log("GPA->HPA: " TARGET_FMT_lx " " TARGET_FMT_lx " %d\n", gpa, physical, access_type);
         }
 
         tlb_set_page(cs, address & TARGET_PAGE_MASK,

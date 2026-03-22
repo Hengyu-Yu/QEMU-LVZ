@@ -234,10 +234,10 @@ static const CSRInfo gcsr_info[] = {
     GCSR_OFF_ARRAY(SAVE, 14),
     GCSR_OFF_ARRAY(SAVE, 15),
     GCSR_OFF(TID),
-    GCSR_OFF_FLAGS(TCFG, CSRFL_IO),
-    GCSR_OFF_FLAGS(TVAL, CSRFL_GUEST_READONLY | CSRFL_IO),
+    GCSR_OFF_FUNCS(TCFG, CSRFL_IO, NULL, gen_helper_gcsrwr_tcfg),
+    GCSR_OFF_FUNCS(TVAL, CSRFL_GUEST_READONLY | CSRFL_IO, gen_helper_gcsrrd_tval, NULL),
     GCSR_OFF(CNTC),
-    GCSR_OFF_FUNCS(TICLR, CSRFL_IO, NULL, NULL),
+    GCSR_OFF_FUNCS(TICLR, CSRFL_IO, NULL, gen_helper_gcsrwr_ticlr),
     GCSR_OFF(LLBCTL),
     GCSR_GSPR(IMPCTL1),
     GCSR_GSPR(IMPCTL2),
@@ -446,7 +446,6 @@ static bool gen_iocsrrd(DisasContext *ctx, arg_rr *a,
 
     if (ctx->guest_mode) {
         gen_helper_gspr(tcg_env);
-        ctx->base.is_jmp = DISAS_NORETURN;
         return true;
     }
 
@@ -465,7 +464,6 @@ static bool gen_iocsrwr(DisasContext *ctx, arg_rr *a,
 
     if (ctx->guest_mode) {
         gen_helper_gspr(tcg_env);
-        ctx->base.is_jmp = DISAS_NORETURN;
         return true;
     }
 
@@ -674,7 +672,6 @@ static bool trans_dbcl(DisasContext *ctx, arg_dbcl *a)
     }
     if (ctx->guest_mode) {
         gen_helper_gspr(tcg_env);
-        ctx->base.is_jmp = DISAS_NORETURN;
         return true;
     }
     generate_exception(ctx, EXCCODE_DBP);
@@ -689,7 +686,6 @@ static bool trans_idle(DisasContext *ctx, arg_idle *a)
 
     if (ctx->guest_mode) {
         gen_helper_gspr(tcg_env);
-        ctx->base.is_jmp = DISAS_NORETURN;
         return true;
     }
 
@@ -935,7 +931,6 @@ static bool trans_hvcl(DisasContext *ctx, arg_hvcl *a)
     
     /* Hypervisor call instruction */
     gen_helper_hvcl(tcg_env, tcg_constant_i32(a->imm));
-    ctx->base.is_jmp = DISAS_NORETURN;
     return true;
 }
 

@@ -112,6 +112,14 @@ static vaddr loongarch_cpu_get_pc(CPUState *cs)
     return cpu_env(cs)->pc;
 }
 
+void trigger_vm_exit(CPULoongArchState *env)
+{
+    cpu_loongarch_set_guest_timer(env_archcpu(env), false);
+    SET_CSR(env, GSTAT, FIELD_DP64(GET_CSR(env, GSTAT), CSR_GSTAT, PGM, 1));
+    env->guest_mode = false;
+    env->vm_exit = true;
+}
+
 #ifndef CONFIG_USER_ONLY
 #include "hw/loongarch/virt.h"
 
@@ -128,11 +136,31 @@ void loongarch_cpu_set_irq(void *opaque, int irq, int level)
     if (kvm_enabled()) {
         kvm_loongarch_set_interrupt(cpu, irq, level);
     } else if (tcg_enabled()) {
-        SET_CSR(env, ESTAT, deposit64(GET_CSR(env, ESTAT), irq, 1, level != 0));
-        if (FIELD_EX64(GET_CSR(env, ESTAT), CSR_ESTAT, IS)) {
+        env->CSR_ESTAT = deposit64(env->CSR_ESTAT, irq, 1, level != 0);
+        if (FIELD_EX64(env->CSR_ESTAT, CSR_ESTAT, IS)) {
             cpu_interrupt(cs, CPU_INTERRUPT_HARD);
         } else {
             cpu_reset_interrupt(cs, CPU_INTERRUPT_HARD);
+        }
+    }
+}
+
+void loongarch_cpu_set_irq_guest(void *opaque, int irq, int level)
+{
+    LoongArchCPU *cpu = opaque;
+    CPULoongArchState *env = &cpu->env;
+    CPUState *cs = CPU(cpu);
+
+    if (irq < 0 || irq >= N_IRQS) {
+        return;
+    }
+
+    env->GCSR_ESTAT = deposit64(env->GCSR_ESTAT, irq, 1, level != 0);
+    if (env->guest_mode) {
+        if (FIELD_EX64(env->GCSR_ESTAT, CSR_ESTAT, IS)) {
+            cpu_interrupt(cs, CPU_INTERRUPT_GUEST);
+        } else {
+            cpu_reset_interrupt(cs, CPU_INTERRUPT_GUEST);
         }
     }
 }
@@ -141,7 +169,7 @@ static inline bool cpu_loongarch_hw_interrupts_enabled(CPULoongArchState *env)
 {
     bool ret = 0;
 
-    ret = (FIELD_EX64(GET_CSR(env, CRMD), CSR_CRMD, IE) &&
+    ret = (FIELD_EX64(env->CSR_CRMD, CSR_CRMD, IE) &&
           !(FIELD_EX64(env->CSR_DBG, CSR_DBG, DST)));
 
     return ret;
@@ -153,10 +181,37 @@ static inline bool cpu_loongarch_hw_interrupts_pending(CPULoongArchState *env)
     uint32_t pending;
     uint32_t status;
 
-    pending = FIELD_EX64(GET_CSR(env, ESTAT), CSR_ESTAT, IS);
-    status  = FIELD_EX64(GET_CSR(env, ECFG), CSR_ECFG, LIE);
+    pending = FIELD_EX64(env->CSR_ESTAT, CSR_ESTAT, IS);
+    status  = FIELD_EX64(env->CSR_ECFG, CSR_ECFG, LIE);
 
     return (pending & status) != 0;
+}
+
+static inline bool cpu_loongarch_hw_interrupts_enabled_guest(CPULoongArchState *env)
+{
+    bool ret = 0;
+    ret = FIELD_EX64(env->GCSR_CRMD, CSR_CRMD, IE);
+    return ret;
+}
+
+/* Check if there is pending and not masked out interrupt */
+static inline bool cpu_loongarch_hw_interrupts_pending_guest(CPULoongArchState *env)
+{
+    uint32_t pending;
+    uint32_t status;
+
+    pending = FIELD_EX64(env->GCSR_ESTAT, CSR_ESTAT, IS);
+    status  = FIELD_EX64(env->GCSR_ECFG, CSR_ECFG, LIE);
+    qemu_log("PENDING: %016x STATUS: %016x\n", pending, status);
+
+    return (pending & status) != 0;
+}
+
+bool loongarch_guest_has_interrupt(CPULoongArchState *env)
+{
+    return env->guest_mode &&
+    cpu_loongarch_hw_interrupts_enabled_guest(env) &&
+    cpu_loongarch_hw_interrupts_pending_guest(env);
 }
 #endif
 
@@ -305,6 +360,9 @@ static void loongarch_cpu_do_interrupt(CPUState *cs)
                       GET_CSR(env, ASID), env->guest_mode);
     }
     cs->exception_index = -1;
+    if (env->vm_exit) {
+        tlb_flush(cs);
+    }
     env->vm_exit = false;
 }
 
@@ -326,17 +384,27 @@ static void loongarch_cpu_do_transaction_failed(CPUState *cs, hwaddr physaddr,
 
 static bool loongarch_cpu_exec_interrupt(CPUState *cs, int interrupt_request)
 {
-    if (interrupt_request & CPU_INTERRUPT_HARD) {
-        CPULoongArchState *env = cpu_env(cs);
+    CPULoongArchState *env = cpu_env(cs);
+    bool has_interrupt = false;
 
+    if (interrupt_request & CPU_INTERRUPT_HARD) {
         if (cpu_loongarch_hw_interrupts_enabled(env) &&
             cpu_loongarch_hw_interrupts_pending(env)) {
-            /* Raise it */
-            cs->exception_index = EXCCODE_INT;
-            loongarch_cpu_do_interrupt(cs);
-            return true;
+            if (env->guest_mode) trigger_vm_exit(env);
+            has_interrupt = true;
+        }
+    } else if (interrupt_request & CPU_INTERRUPT_GUEST) {
+        if (loongarch_guest_has_interrupt(env)) {
+            has_interrupt = true;
         }
     }
+    if (has_interrupt) {
+        /* Raise it */
+        cs->exception_index = EXCCODE_INT;
+        loongarch_cpu_do_interrupt(cs);
+        return true;
+    }
+
     return false;
 }
 #endif
@@ -365,6 +433,11 @@ static bool loongarch_cpu_has_work(CPUState *cs)
 
     if ((cs->interrupt_request & CPU_INTERRUPT_HARD) &&
         cpu_loongarch_hw_interrupts_pending(cpu_env(cs))) {
+        has_work = true;
+    }
+
+    if ((cs->interrupt_request & CPU_INTERRUPT_GUEST) &&
+        loongarch_guest_has_interrupt(cpu_env(cs))) {
         has_work = true;
     }
 
@@ -717,6 +790,8 @@ static void loongarch_cpu_init(Object *obj)
 #ifdef CONFIG_TCG
     timer_init_ns(&cpu->timer, QEMU_CLOCK_VIRTUAL,
                   &loongarch_constant_timer_cb, cpu);
+    timer_init_ns(&cpu->guest_timer, QEMU_CLOCK_VIRTUAL,
+                  &loongarch_constant_timer_cb_guest, cpu);
 #endif
 #endif
 }

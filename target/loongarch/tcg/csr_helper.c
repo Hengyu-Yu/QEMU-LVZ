@@ -65,7 +65,13 @@ target_ulong helper_csrrd_cpuid(CPULoongArchState *env)
 target_ulong helper_csrrd_tval(CPULoongArchState *env)
 {
     LoongArchCPU *cpu = env_archcpu(env);
-    return cpu_loongarch_get_constant_timer_ticks(cpu);
+    return cpu_loongarch_get_constant_timer_ticks(cpu, false);
+}
+
+target_ulong helper_gcsrrd_tval(CPULoongArchState *env)
+{
+    LoongArchCPU *cpu = env_archcpu(env);
+    return cpu_loongarch_get_constant_timer_ticks(cpu, true);
 }
 
 target_ulong helper_csrwr_estat(CPULoongArchState *env, target_ulong val)
@@ -81,8 +87,8 @@ target_ulong helper_gcsrwr_estat(CPULoongArchState *env, target_ulong val)
     int64_t old_v = env->CSR_ESTAT;
     env->GCSR_ESTAT = deposit64(env->GCSR_ESTAT, 0, 2, val);
     if (!env->guest_mode) {
-        env->GCSR_ESTAT = deposit64(env->GCSR_ESTAT, 2, 11, val);
-        env->GCSR_ESTAT = deposit64(env->GCSR_ESTAT, 16, 15, val);
+        env->GCSR_ESTAT = deposit64(env->GCSR_ESTAT, 2, 11, extract64(val, 2, 11));
+        env->GCSR_ESTAT = deposit64(env->GCSR_ESTAT, 16, 15, extract64(val, 16, 15));
     }
 
     return old_v;
@@ -117,7 +123,17 @@ target_ulong helper_csrwr_tcfg(CPULoongArchState *env, target_ulong val)
     LoongArchCPU *cpu = env_archcpu(env);
     int64_t old_v = env->CSR_TCFG;
 
-    cpu_loongarch_store_constant_timer_config(cpu, val);
+    cpu_loongarch_store_constant_timer_config(cpu, val, false);
+
+    return old_v;
+}
+
+target_ulong helper_gcsrwr_tcfg(CPULoongArchState *env, target_ulong val)
+{
+    LoongArchCPU *cpu = env_archcpu(env);
+    int64_t old_v = env->GCSR_TCFG;
+
+    cpu_loongarch_store_constant_timer_config(cpu, val, true);
 
     return old_v;
 }
@@ -130,6 +146,19 @@ target_ulong helper_csrwr_ticlr(CPULoongArchState *env, target_ulong val)
     if (val & 0x1) {
         bql_lock();
         loongarch_cpu_set_irq(cpu, IRQ_TIMER, 0);
+        bql_unlock();
+    }
+    return old_v;
+}
+
+target_ulong helper_gcsrwr_ticlr(CPULoongArchState *env, target_ulong val)
+{
+    LoongArchCPU *cpu = env_archcpu(env);
+    int64_t old_v = 0;
+
+    if (val & 0x1) {
+        bql_lock();
+        loongarch_cpu_set_irq_guest(cpu, IRQ_TIMER, 0);
         bql_unlock();
     }
     return old_v;

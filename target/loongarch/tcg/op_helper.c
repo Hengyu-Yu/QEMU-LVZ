@@ -6,6 +6,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/main-loop.h"
 #include "qemu/log.h"
 #include "cpu.h"
 #include "qemu/host-utils.h"
@@ -134,6 +135,15 @@ void helper_ertn(CPULoongArchState *env)
     env->lladdr = 1;
     if (will_return_to_guest(env)) {
         env->guest_mode = true;
+        tlb_flush(env_cpu(env));
+        cpu_loongarch_set_guest_timer(env_archcpu(env), true);
+        bql_lock();
+        if (loongarch_guest_has_interrupt(env)) {
+            cpu_interrupt(env_cpu(env), CPU_INTERRUPT_GUEST);
+        } else {
+            cpu_reset_interrupt(env_cpu(env), CPU_INTERRUPT_GUEST);
+        }
+        bql_unlock();
     }
 }
 
@@ -156,17 +166,6 @@ void helper_hvcl(CPULoongArchState *env, uint32_t code)
         return;
     }
 
-    /* Check if LVZ capability is available */
-    if (!has_lvz_capability(env)) {
-        do_raise_exception(env, EXCCODE_INE, GETPC());
-        return;
-    }
-
-    /* Store the hypercall code for the hypervisor */
-    /* In a real implementation, this might be stored in a specific register
-     * or memory location that the hypervisor can access */
-
-    /* HVCL instruction causes a VM exit to hypervisor with hypercall reason */
     trigger_vm_exit(env);
     do_raise_exception(env, EXCCODE_HVC, GETPC());
 }

@@ -244,10 +244,6 @@ int get_physical_address(CPULoongArchState *env, hwaddr *physical,
         return TLBRET_MATCH;
     }
 
-    if (env->guest_mode) {
-        qemu_log("TRY: %016lx\n", address);
-    }
-
     plv = kernel_mode | (user_mode << R_CSR_DMW_PLV3_SHIFT);
     if (is_la64(env)) {
         base_v = address >> R_CSR_DMW_64_VSEG_SHIFT;

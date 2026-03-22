@@ -54,14 +54,18 @@ enum {
 extern const VMStateDescription vmstate_loongarch_cpu;
 
 void loongarch_cpu_set_irq(void *opaque, int irq, int level);
+void loongarch_cpu_set_irq_guest(void *opaque, int irq, int level);
 
 void loongarch_constant_timer_cb(void *opaque);
+void cpu_loongarch_set_guest_timer(LoongArchCPU *cpu, bool on);
 uint64_t cpu_loongarch_get_constant_timer_counter(LoongArchCPU *cpu);
-uint64_t cpu_loongarch_get_constant_timer_ticks(LoongArchCPU *cpu);
+uint64_t cpu_loongarch_get_constant_timer_ticks(LoongArchCPU *cpu, bool guest);
 void cpu_loongarch_store_constant_timer_config(LoongArchCPU *cpu,
-                                               uint64_t value);
+                                               uint64_t value, bool guest);
+void loongarch_constant_timer_cb_guest(void *opaque);
 bool loongarch_tlb_search(CPULoongArchState *env, target_ulong vaddr,
                           int *index, bool guest);
+bool loongarch_guest_has_interrupt(CPULoongArchState *env);
 int loongarch_map_host_address(CPULoongArchState *env, hwaddr *physical,
                                       int *prot, target_ulong gpa,
                                       MMUAccessType access_type, int mmu_idx);

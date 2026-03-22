@@ -30,6 +30,8 @@
         env->CSR_##csr_name = (value); \
     }
 
+#define CPU_INTERRUPT_GUEST CPU_INTERRUPT_TGT_EXT_0
+
 #define IOCSRF_TEMP             0
 #define IOCSRF_NODECNT          1
 #define IOCSRF_MSI              2
@@ -470,7 +472,7 @@ struct ArchCPU {
     CPUState parent_obj;
 
     CPULoongArchState env;
-    QEMUTimer timer;
+    QEMUTimer timer, guest_timer;
     uint32_t  phy_id;
 
     /* 'compatible' string for this CPU for Linux device trees */
@@ -587,15 +589,10 @@ static inline uint8_t get_tgid(CPULoongArchState *env)
 
 static inline bool will_return_to_guest(CPULoongArchState *env)
 {
-    return has_lvz_capability(env) && FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, PGM);
+    return has_lvz_capability(env) && env->guest_mode == false && FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, PGM);
 }
 
-static inline void trigger_vm_exit(CPULoongArchState *env)
-{
-    SET_CSR(env, GSTAT, FIELD_DP64(GET_CSR(env, GSTAT), CSR_GSTAT, PGM, 1));
-    env->guest_mode = false;
-    env->vm_exit = true;
-}
+void trigger_vm_exit(CPULoongArchState *env);
 
 void loongarch_cpu_post_init(Object *obj);
 
