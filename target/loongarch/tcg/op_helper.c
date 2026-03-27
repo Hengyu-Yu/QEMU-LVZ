@@ -159,8 +159,7 @@ void helper_idle(CPULoongArchState *env)
 /* Hypervisor call helper */
 void helper_hvcl(CPULoongArchState *env, uint32_t code)
 {
-    /* Check if we're in guest mode */
-    if (!is_guest_mode(env)) {
+    if (env->guest_mode == 0) {
         /* HVCL from host mode should be treated as illegal instruction */
         do_raise_exception(env, EXCCODE_INE, GETPC());
         return;

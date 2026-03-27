@@ -563,11 +563,6 @@ static inline bool has_lvz_capability(CPULoongArchState *env)
     return FIELD_EX32(env->cpucfg[2], CPUCFG2, LVZ);
 }
 
-static inline bool is_guest_mode(CPULoongArchState *env)
-{
-    return has_lvz_capability(env) && env->guest_mode;
-}
-
 static inline uint8_t get_gid(CPULoongArchState *env)
 {
     if (env->guest_mode) {
@@ -589,7 +584,17 @@ static inline uint8_t get_tgid(CPULoongArchState *env)
 
 static inline bool will_return_to_guest(CPULoongArchState *env)
 {
-    return has_lvz_capability(env) && env->guest_mode == false && FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, PGM);
+
+    if (!has_lvz_capability(env) || env->guest_mode) {
+        return false;
+    }
+    if (FIELD_EX64(env->CSR_MERRCTL, CSR_MERRCTL, ISMERR) && FIELD_EX64(env->CSR_MERRCTL, CSR_MERRCTL, PGM)) {
+        return true;
+    }
+    if (FIELD_EX64(env->CSR_TLBRERA, CSR_TLBRERA, ISTLBR) && FIELD_EX64(env->CSR_TLBRPRMD, CSR_TLBRPRMD, PGM)) {
+        return true;
+    }
+    return FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, PGM);
 }
 
 void trigger_vm_exit(CPULoongArchState *env);

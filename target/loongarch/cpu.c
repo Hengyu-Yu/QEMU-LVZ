@@ -115,7 +115,13 @@ static vaddr loongarch_cpu_get_pc(CPUState *cs)
 void trigger_vm_exit(CPULoongArchState *env)
 {
     cpu_loongarch_set_guest_timer(env_archcpu(env), false);
-    SET_CSR(env, GSTAT, FIELD_DP64(GET_CSR(env, GSTAT), CSR_GSTAT, PGM, 1));
+    if (FIELD_EX64(env->CSR_MERRCTL, CSR_MERRCTL, ISMERR)) {
+        env->CSR_MERRCTL = FIELD_DP64(env->CSR_MERRCTL, CSR_MERRCTL, PGM, 1);
+    } else if (FIELD_EX64(env->CSR_TLBRERA, CSR_TLBRERA, ISTLBR)) {
+        env->CSR_TLBRPRMD = FIELD_DP64(env->CSR_TLBRPRMD, CSR_TLBRPRMD, PGM, 1);
+    } else {
+        env->CSR_GSTAT = FIELD_DP64(env->CSR_GSTAT, CSR_GSTAT, PGM, 1);
+    }
     env->guest_mode = false;
     env->vm_exit = true;
 }
@@ -845,6 +851,26 @@ void loongarch_cpu_dump_state(CPUState *cs, FILE *f, int flags)
     qemu_fprintf(f, "TLBRERA=%016" PRIx64 "\n", env->CSR_TLBRERA);
     qemu_fprintf(f, "TCFG=%016" PRIx64 "\n", env->CSR_TCFG);
     qemu_fprintf(f, "TVAL=%016" PRIx64 "\n", env->CSR_TVAL);
+
+    if (has_lvz_capability(env)) {
+        qemu_fprintf(f, "Guest Mode: %d\n", env->guest_mode);
+        qemu_fprintf(f, "GCRMD=%016" PRIx64 "\n", env->GCSR_CRMD);
+        qemu_fprintf(f, "GPRMD=%016" PRIx64 "\n", env->GCSR_PRMD);
+        qemu_fprintf(f, "GEUEN=%016" PRIx64 "\n", env->GCSR_EUEN);
+        qemu_fprintf(f, "GESTAT=%016" PRIx64 "\n", env->GCSR_ESTAT);
+        qemu_fprintf(f, "GERA=%016" PRIx64 "\n", env->GCSR_ERA);
+        qemu_fprintf(f, "GBADV=%016" PRIx64 "\n", env->GCSR_BADV);
+        qemu_fprintf(f, "GBADI=%016" PRIx64 "\n", env->GCSR_BADI);
+        qemu_fprintf(f, "GEENTRY=%016" PRIx64 "\n", env->GCSR_EENTRY);
+        qemu_fprintf(f, "GPRCFG1=%016" PRIx64 ", GPRCFG2=%016" PRIx64 ","
+                 " GPRCFG3=%016" PRIx64 "\n",
+                 env->GCSR_PRCFG1, env->GCSR_PRCFG2, env->GCSR_PRCFG3);
+        qemu_fprintf(f, "GTLBRENTRY=%016" PRIx64 "\n", env->GCSR_TLBRENTRY);
+        qemu_fprintf(f, "GTLBRBADV=%016" PRIx64 "\n", env->GCSR_TLBRBADV);
+        qemu_fprintf(f, "GTLBRERA=%016" PRIx64 "\n", env->GCSR_TLBRERA);
+        qemu_fprintf(f, "GTCFG=%016" PRIx64 "\n", env->GCSR_TCFG);
+        qemu_fprintf(f, "GTVAL=%016" PRIx64 "\n", env->GCSR_TVAL);
+    }
 
     /* fpr */
     if (flags & CPU_DUMP_FPU) {

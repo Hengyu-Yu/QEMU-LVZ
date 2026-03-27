@@ -18,31 +18,15 @@
 #include "exec/log.h"
 #include "cpu-csr.h"
 
-/* LVZ (Virtualization) helper functions */
-
-/* Get Guest ID from current virtualization context */
-static inline uint8_t get_current_guest_id(CPULoongArchState *env)
-{
-    if (is_guest_mode(env)) {
-        return get_gid(env);
-    }
-    return 0; /* Host mode uses GID 0 */
-}
-
-/* Check if TLB entry belongs to current guest/host context */
-static inline bool tlb_entry_matches_guest(CPULoongArchState *env, LoongArchTLB *tlb)
-{
-    uint8_t current_gid = get_current_guest_id(env);
-    uint8_t entry_gid = FIELD_EX64(tlb->tlb_misc, TLB_MISC, GID);
-
-    return entry_gid == current_gid;
-}
-
-/* Check if TLB entry belongs to current guest/host context */
 static inline bool tlb_entry_matches_gid(LoongArchTLB *tlb, uint8_t gid)
 {
     uint8_t entry_gid = FIELD_EX64(tlb->tlb_misc, TLB_MISC, GID);
     return entry_gid == gid;
+}
+
+static inline bool tlb_entry_matches_guest(CPULoongArchState *env, LoongArchTLB *tlb)
+{
+    return tlb_entry_matches_gid(tlb, get_tgid(env));
 }
 
 static void get_dir_base_width(CPULoongArchState *env, uint64_t *dir_base,
@@ -243,7 +227,7 @@ static void fill_tlb_entry(CPULoongArchState *env, int index, bool guest)
     tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc, TLB_MISC, E, 1);
     csr_asid = FIELD_EX64(guest ? env->GCSR_ASID : env->CSR_ASID, CSR_ASID, ASID);
     tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc, TLB_MISC, ASID, csr_asid);
-    tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc, TLB_MISC, GID, get_tgid(env));
+    tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc, TLB_MISC, GID, env->guest_mode ? get_gid(env) : get_tgid(env));
 
     tlb->tlb_entry0 = lo0;
     tlb->tlb_entry1 = lo1;
@@ -322,7 +306,7 @@ void helper_tlbrd(CPULoongArchState *env)
     tlb = env->guest_mode ? &env->gtlb[index] : &env->tlb[index];
 
     /* Check if TLB entry belongs to current guest context */
-    if ((!tlb_entry_matches_gid(tlb, get_tgid(env))) && env->guest_mode) {
+    if ((!tlb_entry_matches_guest(env, tlb)) && env->guest_mode) {
         /* Invalid TLB entry for current guest */
         SET_CSR(env, TLBIDX, FIELD_DP64(GET_CSR(env, TLBIDX), CSR_TLBIDX, NE, 1));
         SET_CSR(env, ASID, FIELD_DP64(GET_CSR(env, ASID), CSR_ASID, ASID, 0));
@@ -536,7 +520,7 @@ void helper_tlbclr(CPULoongArchState *env)
             tlb = env->guest_mode ? &env->gtlb[i * 256 + (index % 256)] : &env->tlb[i * 256 + (index % 256)];
 
             /* Only clear entries belonging to current guest */
-            if ((!tlb_entry_matches_gid(tlb, get_tgid(env))) && env->guest_mode) {
+            if ((!tlb_entry_matches_guest(env, tlb)) && env->guest_mode) {
                 continue;
             }
 
@@ -552,7 +536,7 @@ void helper_tlbclr(CPULoongArchState *env)
             tlb = env->guest_mode ? &env->gtlb[i] : &env->tlb[i];
 
             /* Only clear entries belonging to current guest */
-            if ((!tlb_entry_matches_gid(tlb, get_tgid(env))) && env->guest_mode) {
+            if ((!tlb_entry_matches_guest(env, tlb)) && env->guest_mode) {
                 continue;
             }
 
@@ -632,8 +616,7 @@ void helper_tlbflush(CPULoongArchState *env)
             int s_idx = i * 256 + (index % 256);
             tlb = env->guest_mode ? &env->gtlb[s_idx] : &env->tlb[s_idx];
 
-            /* Only flush entries belonging to current guest */
-            if ((tlb_entry_matches_gid(tlb, get_tgid(env))) || env->guest_mode == 0) {
+            if (tlb_entry_matches_guest(env, tlb) || env->guest_mode == 0) {
                 tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc,
                                                       TLB_MISC, E, 0);
             }
@@ -643,7 +626,7 @@ void helper_tlbflush(CPULoongArchState *env)
         for (i = LOONGARCH_STLB; i < LOONGARCH_TLB_MAX; i++) {
             tlb = env->guest_mode ? &env->gtlb[i] : &env->tlb[i];
             /* Only flush entries belonging to current guest */
-            if ((tlb_entry_matches_gid(tlb, get_tgid(env))) || env->guest_mode == 0) {
+            if (tlb_entry_matches_guest(env, tlb) || env->guest_mode == 0) {
                 tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc,
                                                   TLB_MISC, E, 0);
             }
@@ -657,7 +640,7 @@ void helper_gtlbflush(CPULoongArchState *env)
 {
     int i, index;
 
-    if (is_guest_mode(env)) {
+    if (env->guest_mode) {
         do_raise_exception(env, EXCCODE_IPE, GETPC());
         return;
     }
@@ -701,7 +684,7 @@ void helper_invtlb_all(CPULoongArchState *env, target_ulong info, uint32_t curre
         current_only = 1;
     }
 
-    uint16_t gid = to_guest ? ((info >> 16) & 0xff) : get_gid(env);
+    uint16_t gid = to_guest ? ((info >> 16) & 0xff) : get_tgid(env);
 
     for (int i = 0; i < LOONGARCH_TLB_AND_GTLB_MAX; i++) {
         if (current_only == 0 || tlb_entry_matches_gid(&env->tlb[i], gid)) {
@@ -717,7 +700,7 @@ void helper_invtlb_all_g(CPULoongArchState *env, target_ulong info, uint32_t g, 
     if (to_guest && env->guest_mode) {
         do_raise_exception(env, EXCCODE_IPE, GETPC());
     }
-    uint16_t gid = to_guest ? ((info >> 16) & 0xff) : get_gid(env);
+    uint16_t gid = to_guest ? ((info >> 16) & 0xff) : get_tgid(env);
 
     for (int i = 0; i < LOONGARCH_TLB_AND_GTLB_MAX; i++) {
         LoongArchTLB *tlb = &env->tlb[i];
@@ -736,7 +719,7 @@ void helper_invtlb_all_asid(CPULoongArchState *env, target_ulong info, uint32_t 
         do_raise_exception(env, EXCCODE_IPE, GETPC());
     }
     uint16_t asid = info & R_CSR_ASID_ASID_MASK;
-    uint16_t gid = to_guest ? ((info >> 16) & 0xff) : get_gid(env);
+    uint16_t gid = to_guest ? ((info >> 16) & 0xff) : get_tgid(env);
 
     for (int i = 0; i < LOONGARCH_TLB_AND_GTLB_MAX; i++) {
         LoongArchTLB *tlb = &env->tlb[i];
@@ -757,7 +740,7 @@ void helper_invtlb_page_asid(CPULoongArchState *env, target_ulong info,
         do_raise_exception(env, EXCCODE_IPE, GETPC());
     }
     uint16_t asid = info & 0x3ff;
-    uint16_t gid = to_guest ? ((info >> 16) & 0xff) : get_gid(env);
+    uint16_t gid = to_guest ? ((info >> 16) & 0xff) : get_tgid(env);
 
     for (int i = 0; i < LOONGARCH_TLB_AND_GTLB_MAX; i++) {
         LoongArchTLB *tlb = &env->tlb[i];
@@ -794,7 +777,7 @@ void helper_invtlb_page_asid_or_g(CPULoongArchState *env,
         do_raise_exception(env, EXCCODE_IPE, GETPC());
     }
     uint16_t asid = info & 0x3ff;
-    uint16_t gid = to_guest ? ((info >> 16) & 0xff) : get_gid(env);
+    uint16_t gid = to_guest ? ((info >> 16) & 0xff) : get_tgid(env);
 
     for (int i = 0; i < LOONGARCH_TLB_AND_GTLB_MAX; i++) {
         LoongArchTLB *tlb = &env->tlb[i];
