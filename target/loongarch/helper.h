@@ -112,6 +112,7 @@ DEF_HELPER_2(gcsrwr_tcfg, i64, env, tl)
 DEF_HELPER_2(csrwr_ticlr, i64, env, tl)
 DEF_HELPER_2(gcsrwr_ticlr, i64, env, tl)
 DEF_HELPER_2(gspr_wr, i64, env, tl)
+DEF_HELPER_2(csrwr_gintc, i64, env, tl)
 
 DEF_HELPER_2(iocsrrd_b, i64, env, tl)
 DEF_HELPER_2(iocsrrd_h, i64, env, tl)

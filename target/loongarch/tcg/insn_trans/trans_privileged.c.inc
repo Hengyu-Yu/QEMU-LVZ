@@ -186,7 +186,7 @@ static const CSRInfo csr_info[] = {
     CSR_OFF(TRGP),
     CSR_OFF(GSTAT),
     CSR_OFF(GCFG),
-    CSR_OFF(GINTC),
+    CSR_OFF_FUNCS(GINTC, CSRFL_IO, NULL, gen_helper_csrwr_gintc),
     CSR_OFF(GCNTC),
 };
 

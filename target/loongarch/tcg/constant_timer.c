@@ -56,8 +56,6 @@ void cpu_loongarch_store_constant_timer_config(LoongArchCPU *cpu,
         now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
         next = now + (value & CONSTANT_TIMER_TICK_MASK) * TIMER_PERIOD;
         timer_mod(timer, next);
-        if (guest)
-            qemu_log("GUEST TIMER ENABLED BY SELF\n");
     } else {
         timer_del(timer);
     }
@@ -105,8 +103,6 @@ void loongarch_constant_timer_cb_guest(void *opaque)
     LoongArchCPU *cpu  = opaque;
     CPULoongArchState *env = &cpu->env;
     uint64_t now, next;
-
-    qemu_log("GUEST TIME INTERRUPT\n");
 
     if (FIELD_EX64(env->GCSR_TCFG, CSR_TCFG, PERIODIC)) {
         now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);

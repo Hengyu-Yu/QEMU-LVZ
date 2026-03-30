@@ -88,6 +88,10 @@ target_ulong helper_gcsrwr_estat(CPULoongArchState *env, target_ulong val)
     env->GCSR_ESTAT = deposit64(env->GCSR_ESTAT, 0, 2, val);
     if (!env->guest_mode) {
         env->GCSR_ESTAT = deposit64(env->GCSR_ESTAT, 2, 11, extract64(val, 2, 11));
+        if (extract64(val, 2, 8) & FIELD_EX64(env->CSR_GINTC, CSR_GINTC, HWIC)) {
+            env->CSR_ESTAT = deposit64(env->CSR_ESTAT, 2, 8,
+                                       extract64(env->CSR_ESTAT, 2, 8) & (~extract64(val, 2, 8)));
+        }
         env->GCSR_ESTAT = deposit64(env->GCSR_ESTAT, 16, 15, extract64(val, 16, 15));
     }
 
@@ -161,6 +165,16 @@ target_ulong helper_gcsrwr_ticlr(CPULoongArchState *env, target_ulong val)
         loongarch_cpu_set_irq_guest(cpu, IRQ_TIMER, 0);
         bql_unlock();
     }
+    return old_v;
+}
+
+target_ulong helper_csrwr_gintc(CPULoongArchState *env, target_ulong val)
+{
+    int64_t old_v = env->CSR_GINTC;
+
+    env->CSR_GINTC = val & 0xFFFF00;
+    env->GCSR_ESTAT = deposit64(env->GCSR_ESTAT, 2, 8, extract64(val, 0, 8));
+
     return old_v;
 }
 

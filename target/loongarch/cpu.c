@@ -139,6 +139,11 @@ void loongarch_cpu_set_irq(void *opaque, int irq, int level)
         return;
     }
 
+    if (FIELD_EX64(env->CSR_GINTC, CSR_GINTC, HWIP) & (1 << irq)) {
+        loongarch_cpu_set_irq_guest(opaque, irq, level);
+        return;
+    }
+
     if (kvm_enabled()) {
         kvm_loongarch_set_interrupt(cpu, irq, level);
     } else if (tcg_enabled()) {
@@ -208,7 +213,6 @@ static inline bool cpu_loongarch_hw_interrupts_pending_guest(CPULoongArchState *
 
     pending = FIELD_EX64(env->GCSR_ESTAT, CSR_ESTAT, IS);
     status  = FIELD_EX64(env->GCSR_ECFG, CSR_ECFG, LIE);
-    qemu_log("PENDING: %016x STATUS: %016x\n", pending, status);
 
     return (pending & status) != 0;
 }
