@@ -398,7 +398,7 @@ void helper_tlbwr(CPULoongArchState *env)
     invalidate_tlb(env, index, env->guest_mode);
 
     if (FIELD_EX64(GET_CSR(env, TLBIDX), CSR_TLBIDX, NE)) {
-        tlb[index].tlb_misc = FIELD_DP64(tlb[index].tlb_misc,
+        tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc,
                                               TLB_MISC, E, 0);
         return;
     }
@@ -418,7 +418,7 @@ void helper_gtlbwr(CPULoongArchState *env)
     invalidate_tlb(env, index, true);
 
     if (FIELD_EX64(env->GCSR_TLBIDX, CSR_TLBIDX, NE)) {
-        tlb[index].tlb_misc = FIELD_DP64(tlb[index].tlb_misc,
+        tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc,
                                               TLB_MISC, E, 0);
         return;
     }

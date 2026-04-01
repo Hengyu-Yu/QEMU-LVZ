@@ -515,7 +515,7 @@ static inline bool is_va32(CPULoongArchState *env)
 {
     /* VA32 if !LA64 or VA32L[1-3] */
     bool va32 = !is_la64(env);
-    uint64_t plv = FIELD_EX64(env->CSR_CRMD, CSR_CRMD, PLV);
+    uint64_t plv = FIELD_EX64(GET_CSR(env, CRMD), CSR_CRMD, PLV);
     if (plv >= 1 && (FIELD_EX64(env->CSR_MISC, CSR_MISC, VA32) & (1 << plv))) {
         va32 = true;
     }
@@ -546,10 +546,10 @@ static inline void cpu_get_tb_cpu_state(CPULoongArchState *env, vaddr *pc,
 {
     *pc = env->pc;
     *cs_base = 0;
-    *flags = env->CSR_CRMD & (R_CSR_CRMD_PLV_MASK | R_CSR_CRMD_PG_MASK);
-    *flags |= FIELD_EX64(env->CSR_EUEN, CSR_EUEN, FPE) * HW_FLAGS_EUEN_FPE;
-    *flags |= FIELD_EX64(env->CSR_EUEN, CSR_EUEN, SXE) * HW_FLAGS_EUEN_SXE;
-    *flags |= FIELD_EX64(env->CSR_EUEN, CSR_EUEN, ASXE) * HW_FLAGS_EUEN_ASXE;
+    *flags = GET_CSR(env, CRMD) & (R_CSR_CRMD_PLV_MASK | R_CSR_CRMD_PG_MASK);
+    *flags |= FIELD_EX64(GET_CSR(env, EUEN), CSR_EUEN, FPE) * HW_FLAGS_EUEN_FPE;
+    *flags |= FIELD_EX64(GET_CSR(env, EUEN), CSR_EUEN, SXE) * HW_FLAGS_EUEN_SXE;
+    *flags |= FIELD_EX64(GET_CSR(env, EUEN), CSR_EUEN, ASXE) * HW_FLAGS_EUEN_ASXE;
     *flags |= is_va32(env) * HW_FLAGS_VA32;
 }
 
