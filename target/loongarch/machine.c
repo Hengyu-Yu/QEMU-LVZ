@@ -250,7 +250,7 @@ static const VMStateDescription vmstate_lvz = {
         VMSTATE_UINT64(env.GCSR_DSAVE, LoongArchCPU),
 
         /* Guest CSRs - Guest Mode */
-        VMSTATE_BOOL(env.guest_mode, LoongArchCPU),
+        VMSTATE_BOOL(env.guest, LoongArchCPU),
 
         VMSTATE_END_OF_LIST()
     },

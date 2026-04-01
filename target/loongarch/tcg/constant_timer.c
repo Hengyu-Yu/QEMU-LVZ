@@ -25,7 +25,7 @@ uint64_t cpu_loongarch_get_constant_timer_ticks(LoongArchCPU *cpu, bool guest)
     uint64_t now, expire;
     CPULoongArchState *env = &cpu->env;
 
-    if (guest && !env->guest_mode) {
+    if (guest && !env->guest) {
         return env->GCSR_TVAL;
     }
 
@@ -48,7 +48,7 @@ void cpu_loongarch_store_constant_timer_config(LoongArchCPU *cpu,
         env->CSR_TCFG = value;
     }
 
-    if (guest && !env->guest_mode) {
+    if (guest && !env->guest) {
         return;
     }
 

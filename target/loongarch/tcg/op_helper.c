@@ -49,7 +49,7 @@ target_ulong helper_bitswap(target_ulong v)
 void helper_asrtle_d(CPULoongArchState *env, target_ulong rj, target_ulong rk)
 {
     if (rj > rk) {
-        SET_CSR(env, BADV, rj);
+        SET_CSR_IF(env->guest, BADV, rj);
         do_raise_exception(env, EXCCODE_BCE, GETPC());
     }
 }
@@ -57,7 +57,7 @@ void helper_asrtle_d(CPULoongArchState *env, target_ulong rj, target_ulong rk)
 void helper_asrtgt_d(CPULoongArchState *env, target_ulong rj, target_ulong rk)
 {
     if (rj <= rk) {
-        SET_CSR(env, BADV, rj);
+        SET_CSR_IF(env->guest, BADV, rj);
         do_raise_exception(env, EXCCODE_BCE, GETPC());
     }
 }
@@ -83,7 +83,7 @@ target_ulong helper_crc32c(target_ulong val, target_ulong m, uint64_t sz)
 
 target_ulong helper_cpucfg(CPULoongArchState *env, target_ulong rj)
 {
-    if (env->guest_mode) {
+    if (env->guest) {
         trigger_vm_exit(env);
         do_raise_exception(env, EXCCODE_GSPR, GETPC());
     }
@@ -98,8 +98,8 @@ uint64_t helper_rdtime_d(CPULoongArchState *env)
     uint64_t plv;
     LoongArchCPU *cpu = env_archcpu(env);
 
-    plv = FIELD_EX64(GET_CSR(env, CRMD), CSR_CRMD, PLV);
-    if (extract64(GET_CSR(env, MISC), R_CSR_MISC_DRDTL_SHIFT + plv, 1)) {
+    plv = FIELD_EX64(GET_CSR_IF(env->guest, CRMD), CSR_CRMD, PLV);
+    if (extract64(GET_CSR_IF(env->guest, MISC), R_CSR_MISC_DRDTL_SHIFT + plv, 1)) {
         do_raise_exception(env, EXCCODE_IPE, GETPC());
     }
     return cpu_loongarch_get_constant_timer_counter(cpu);
@@ -111,31 +111,30 @@ void helper_ertn(CPULoongArchState *env)
 {
     uint64_t csr_pplv, csr_pie;
 
-    if (FIELD_EX64(GET_CSR(env, TLBRERA), CSR_TLBRERA, ISTLBR)) {
-        csr_pplv = FIELD_EX64(GET_CSR(env, TLBRPRMD), CSR_TLBRPRMD, PPLV);
-        csr_pie = FIELD_EX64(GET_CSR(env, TLBRPRMD), CSR_TLBRPRMD, PIE);
+    if (FIELD_EX64(GET_CSR_IF(env->guest, TLBRERA), CSR_TLBRERA, ISTLBR)) {
+        csr_pplv = FIELD_EX64(GET_CSR_IF(env->guest, TLBRPRMD), CSR_TLBRPRMD, PPLV);
+        csr_pie = FIELD_EX64(GET_CSR_IF(env->guest, TLBRPRMD), CSR_TLBRPRMD, PIE);
 
-        SET_CSR(env, TLBRERA, FIELD_DP64(GET_CSR(env, TLBRERA), CSR_TLBRERA, ISTLBR, 0));
-        SET_CSR(env, CRMD, FIELD_DP64(GET_CSR(env, CRMD), CSR_CRMD, DA, 0));
-        SET_CSR(env, CRMD, FIELD_DP64(GET_CSR(env, CRMD), CSR_CRMD, PG, 1));
-        set_pc(env, GET_CSR(env, TLBRERA));
+        SET_CSR_IF(env->guest, TLBRERA, FIELD_DP64(GET_CSR_IF(env->guest, TLBRERA), CSR_TLBRERA, ISTLBR, 0));
+        SET_CSR_IF(env->guest, CRMD, FIELD_DP64(GET_CSR_IF(env->guest, CRMD), CSR_CRMD, DA, 0));
+        SET_CSR_IF(env->guest, CRMD, FIELD_DP64(GET_CSR_IF(env->guest, CRMD), CSR_CRMD, PG, 1));
+        set_pc(env, GET_CSR_IF(env->guest, TLBRERA));
         qemu_log_mask(CPU_LOG_INT, "%s: TLBRERA " TARGET_FMT_lx "\n",
-                      __func__, GET_CSR(env, TLBRERA));
+                      __func__, GET_CSR_IF(env->guest, TLBRERA));
     } else {
-        csr_pplv = FIELD_EX64(GET_CSR(env, PRMD), CSR_PRMD, PPLV);
-        csr_pie = FIELD_EX64(GET_CSR(env, PRMD), CSR_PRMD, PIE);
+        csr_pplv = FIELD_EX64(GET_CSR_IF(env->guest, PRMD), CSR_PRMD, PPLV);
+        csr_pie = FIELD_EX64(GET_CSR_IF(env->guest, PRMD), CSR_PRMD, PIE);
 
-        set_pc(env, GET_CSR(env, ERA));
+        set_pc(env, GET_CSR_IF(env->guest, ERA));
         qemu_log_mask(CPU_LOG_INT, "%s: ERA " TARGET_FMT_lx "\n",
-                      __func__, GET_CSR(env, ERA));
+                      __func__, GET_CSR_IF(env->guest, ERA));
     }
-    SET_CSR(env, CRMD, FIELD_DP64(GET_CSR(env, CRMD), CSR_CRMD, PLV, csr_pplv));
-    SET_CSR(env, CRMD, FIELD_DP64(GET_CSR(env, CRMD), CSR_CRMD, IE, csr_pie));
+    SET_CSR_IF(env->guest, CRMD, FIELD_DP64(GET_CSR_IF(env->guest, CRMD), CSR_CRMD, PLV, csr_pplv));
+    SET_CSR_IF(env->guest, CRMD, FIELD_DP64(GET_CSR_IF(env->guest, CRMD), CSR_CRMD, IE, csr_pie));
 
     env->lladdr = 1;
     if (will_return_to_guest(env)) {
-        env->guest_mode = true;
-        tlb_flush(env_cpu(env));
+        env->guest = true;
         cpu_loongarch_set_guest_timer(env_archcpu(env), true);
         bql_lock();
         if (loongarch_guest_has_interrupt(env)) {
@@ -159,7 +158,7 @@ void helper_idle(CPULoongArchState *env)
 /* Hypervisor call helper */
 void helper_hvcl(CPULoongArchState *env, uint32_t code)
 {
-    if (env->guest_mode == 0) {
+    if (env->guest == 0) {
         /* HVCL from host mode should be treated as illegal instruction */
         do_raise_exception(env, EXCCODE_INE, GETPC());
         return;

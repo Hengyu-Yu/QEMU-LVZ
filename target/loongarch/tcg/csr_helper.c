@@ -86,7 +86,7 @@ target_ulong helper_gcsrwr_estat(CPULoongArchState *env, target_ulong val)
 {
     int64_t old_v = env->CSR_ESTAT;
     env->GCSR_ESTAT = deposit64(env->GCSR_ESTAT, 0, 2, val);
-    if (!env->guest_mode) {
+    if (!env->guest) {
         env->GCSR_ESTAT = deposit64(env->GCSR_ESTAT, 2, 11, extract64(val, 2, 11));
         if (extract64(val, 2, 8) & FIELD_EX64(env->CSR_GINTC, CSR_GINTC, HWIC)) {
             env->CSR_ESTAT = deposit64(env->CSR_ESTAT, 2, 8,

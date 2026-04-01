@@ -20,7 +20,7 @@ static int loongarch_map_tlb_entry(CPULoongArchState *env, hwaddr *physical,
                                    int access_type, int index, int mmu_idx, bool guest)
 {
     LoongArchTLB *tlb = guest ? &env->gtlb[index] : &env->tlb[index];
-    uint64_t plv = mmu_idx;
+    uint64_t plv = mmu_idx_to_plv(mmu_idx);
     uint64_t tlb_entry, tlb_ppn;
     uint8_t tlb_ps, n, tlb_v, tlb_d, tlb_plv, tlb_nx, tlb_nr, tlb_rplv;
 
@@ -182,10 +182,10 @@ static int loongarch_map_address(CPULoongArchState *env, hwaddr *physical,
 {
     int index, match;
 
-    match = loongarch_tlb_search(env, address, &index, env->guest_mode);
+    match = loongarch_tlb_search(env, address, &index, env->guest);
     if (match) {
         return loongarch_map_tlb_entry(env, physical, prot,
-                                        address, access_type, index, mmu_idx, env->guest_mode);
+                                        address, access_type, index, mmu_idx, env->guest);
     }
 
     return TLBRET_NOMATCH;
@@ -211,31 +211,16 @@ static hwaddr dmw_va2pa(CPULoongArchState *env, target_ulong va,
     }
 }
 
-static int get_guest_cpu_mmu_index(CPULoongArchState *env)
-{
-    if (FIELD_EX64(env->GCSR_CRMD, CSR_CRMD, PG)) {
-        return FIELD_EX64(env->GCSR_CRMD, CSR_CRMD, PLV);
-    }
-    return MMU_DA_IDX;
-}
-
 int get_physical_address(CPULoongArchState *env, hwaddr *physical,
                          int *prot, target_ulong address,
                          MMUAccessType access_type, int mmu_idx)
 {
-    int user_mode, kernel_mode;
-    if (env->guest_mode) {
-        user_mode = get_guest_cpu_mmu_index(env) == MMU_USER_IDX;
-        kernel_mode = get_guest_cpu_mmu_index(env) == MMU_KERNEL_IDX;
-    } else {
-        user_mode = mmu_idx == MMU_USER_IDX;
-        kernel_mode = mmu_idx == MMU_KERNEL_IDX;
-    }
-    uint32_t plv, base_c, base_v;
+    uint32_t plv = mmu_idx_to_plv(mmu_idx);
+    uint32_t base_c, base_v;
     int64_t addr_high;
     uint8_t da, pg;
-    da = FIELD_EX64(GET_CSR(env, CRMD), CSR_CRMD, DA);
-    pg = FIELD_EX64(GET_CSR(env, CRMD), CSR_CRMD, PG);
+    da = FIELD_EX64(GET_CSR_IF(env->guest, CRMD), CSR_CRMD, DA);
+    pg = FIELD_EX64(GET_CSR_IF(env->guest, CRMD), CSR_CRMD, PG);
 
     /* Check PG and DA */
     if (da & !pg) {
@@ -244,7 +229,6 @@ int get_physical_address(CPULoongArchState *env, hwaddr *physical,
         return TLBRET_MATCH;
     }
 
-    plv = kernel_mode | (user_mode << R_CSR_DMW_PLV3_SHIFT);
     if (is_la64(env)) {
         base_v = address >> R_CSR_DMW_64_VSEG_SHIFT;
     } else {
@@ -253,12 +237,12 @@ int get_physical_address(CPULoongArchState *env, hwaddr *physical,
     /* Check direct map window */
     for (int i = 0; i < 4; i++) {
         if (is_la64(env)) {
-            base_c = FIELD_EX64(GET_CSR(env, DMW[i]), CSR_DMW_64, VSEG);
+            base_c = FIELD_EX64(GET_CSR_IF(env->guest, DMW[i]), CSR_DMW_64, VSEG);
         } else {
-            base_c = FIELD_EX64(GET_CSR(env, DMW[i]), CSR_DMW_32, VSEG);
+            base_c = FIELD_EX64(GET_CSR_IF(env->guest, DMW[i]), CSR_DMW_32, VSEG);
         }
-        if ((plv & GET_CSR(env, DMW[i])) && (base_c == base_v)) {
-            *physical = dmw_va2pa(env, address, GET_CSR(env, DMW[i]));
+        if ((GET_CSR_IF(env->guest, DMW[i]) & (1 << plv)) && (base_c == base_v)) {
+            *physical = dmw_va2pa(env, address, GET_CSR_IF(env->guest, DMW[i]));
             *prot = PAGE_READ | PAGE_WRITE | PAGE_EXEC;
             return TLBRET_MATCH;
         }

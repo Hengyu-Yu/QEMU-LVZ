@@ -20,11 +20,11 @@
 #include "cpu-qom.h"
 #include "qemu/log.h"
 
-#define GET_CSR(env, csr_name) \
-    ((env->guest_mode) ? (env->GCSR_##csr_name) : (env->CSR_##csr_name))
+#define GET_CSR_IF(guest_mode, csr_name) \
+    ((guest_mode) ? (env->GCSR_##csr_name) : (env->CSR_##csr_name))
 
-#define SET_CSR(env, csr_name, value) \
-    if (env->guest_mode) {\
+#define SET_CSR_IF(guest_mode, csr_name, value) \
+    if (guest_mode) {\
         env->GCSR_##csr_name = (value); \
     } else {\
         env->CSR_##csr_name = (value); \
@@ -437,7 +437,7 @@ typedef struct CPUArchState {
     uint64_t GCSR_GTLBC;
     uint64_t GCSR_TRGP;
 
-    bool guest_mode, vm_exit;
+    bool guest, vm_exit;
 
 #ifdef CONFIG_TCG
     float_status fp_status;
@@ -496,15 +496,48 @@ struct LoongArchCPUClass {
 };
 
 /*
- * LoongArch CPUs has 4 privilege levels.
- * 0 for kernel mode, 3 for user mode.
- * Define an extra index for DA(direct addressing) mode.
+ * LoongArch MMU index scheme (inspired by x86 SVM nested paging):
+ *
+ * Host indices (0-4): used when not in guest mode
+ *   0: PLV0 (kernel)
+ *   1: PLV1
+ *   2: PLV2
+ *   3: PLV3 (user)
+ *   4: DA (direct addressing) mode
+ *
+ * Guest indices (5-9): used in guest mode (LVZ)
+ *   5: guest PLV0 (kernel)
+ *   6: guest PLV1
+ *   7: guest PLV2
+ *   8: guest PLV3 (user)
+ *   9: guest DA mode
+ *
+ * The mmu_idx statically encodes which context we're in,
+ * eliminating runtime env->guest_mode checks in the memory path.
  */
-#define MMU_PLV_KERNEL   0
-#define MMU_PLV_USER     3
-#define MMU_KERNEL_IDX   MMU_PLV_KERNEL
-#define MMU_USER_IDX     MMU_PLV_USER
-#define MMU_DA_IDX       4
+#define MMU_KERNEL_IDX       0
+#define MMU_USER_IDX         3
+#define MMU_PLV_KERNEL       MMU_KERNEL_IDX
+#define MMU_PLV_USER         MMU_USER_IDX
+#define MMU_DA_IDX           4
+#define MMU_GUEST_IDX        5
+#define MMU_GUEST_DA_IDX     9
+
+static inline bool is_guest_mmu_idx(int mmu_idx)
+{
+    return mmu_idx >= MMU_GUEST_IDX;
+}
+
+static inline int mmu_idx_to_plv(int mmu_idx)
+{
+    if (mmu_idx == MMU_DA_IDX || mmu_idx == MMU_GUEST_DA_IDX) {
+        return 0;
+    }
+    if (mmu_idx >= MMU_GUEST_IDX) {
+        return mmu_idx - MMU_GUEST_IDX;
+    }
+    return mmu_idx;
+}
 
 static inline bool is_la64(CPULoongArchState *env)
 {
@@ -515,7 +548,7 @@ static inline bool is_va32(CPULoongArchState *env)
 {
     /* VA32 if !LA64 or VA32L[1-3] */
     bool va32 = !is_la64(env);
-    uint64_t plv = FIELD_EX64(GET_CSR(env, CRMD), CSR_CRMD, PLV);
+    uint64_t plv = FIELD_EX64(GET_CSR_IF(env->guest, CRMD), CSR_CRMD, PLV);
     if (plv >= 1 && (FIELD_EX64(env->CSR_MISC, CSR_MISC, VA32) & (1 << plv))) {
         va32 = true;
     }
@@ -540,16 +573,23 @@ static inline void set_pc(CPULoongArchState *env, uint64_t value)
 #define HW_FLAGS_CRMD_PG    R_CSR_CRMD_PG_MASK   /* 0x10 */
 #define HW_FLAGS_VA32       0x20
 #define HW_FLAGS_EUEN_ASXE  0x40
+#define HW_FLAGS_GUEST_MODE 0x80
 
 static inline void cpu_get_tb_cpu_state(CPULoongArchState *env, vaddr *pc,
                                         uint64_t *cs_base, uint32_t *flags)
 {
     *pc = env->pc;
     *cs_base = 0;
-    *flags = GET_CSR(env, CRMD) & (R_CSR_CRMD_PLV_MASK | R_CSR_CRMD_PG_MASK);
-    *flags |= FIELD_EX64(GET_CSR(env, EUEN), CSR_EUEN, FPE) * HW_FLAGS_EUEN_FPE;
-    *flags |= FIELD_EX64(GET_CSR(env, EUEN), CSR_EUEN, SXE) * HW_FLAGS_EUEN_SXE;
-    *flags |= FIELD_EX64(GET_CSR(env, EUEN), CSR_EUEN, ASXE) * HW_FLAGS_EUEN_ASXE;
+    /* In guest mode, use guest CRMD for PLV and PG flags */
+    if (env->guest) {
+        *flags = env->GCSR_CRMD & (R_CSR_CRMD_PLV_MASK | R_CSR_CRMD_PG_MASK);
+        *flags |= HW_FLAGS_GUEST_MODE;
+    } else {
+        *flags = GET_CSR_IF(env->guest, CRMD) & (R_CSR_CRMD_PLV_MASK | R_CSR_CRMD_PG_MASK);
+    }
+    *flags |= FIELD_EX64(GET_CSR_IF(env->guest, EUEN), CSR_EUEN, FPE) * HW_FLAGS_EUEN_FPE;
+    *flags |= FIELD_EX64(GET_CSR_IF(env->guest, EUEN), CSR_EUEN, SXE) * HW_FLAGS_EUEN_SXE;
+    *flags |= FIELD_EX64(GET_CSR_IF(env->guest, EUEN), CSR_EUEN, ASXE) * HW_FLAGS_EUEN_ASXE;
     *flags |= is_va32(env) * HW_FLAGS_VA32;
 }
 
@@ -565,7 +605,7 @@ static inline bool has_lvz_capability(CPULoongArchState *env)
 
 static inline uint8_t get_gid(CPULoongArchState *env)
 {
-    if (env->guest_mode) {
+    if (env->guest) {
         return FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, GID);
     }
     return 0;
@@ -585,7 +625,7 @@ static inline uint8_t get_tgid(CPULoongArchState *env)
 static inline bool will_return_to_guest(CPULoongArchState *env)
 {
 
-    if (!has_lvz_capability(env) || env->guest_mode) {
+    if (!has_lvz_capability(env) || env->guest) {
         return false;
     }
     if (FIELD_EX64(env->CSR_MERRCTL, CSR_MERRCTL, ISMERR) && FIELD_EX64(env->CSR_MERRCTL, CSR_MERRCTL, PGM)) {
