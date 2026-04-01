@@ -825,7 +825,7 @@ bool loongarch_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
         if (env->guest_mode) {
             gpa = physical;
             ret = loongarch_map_host_address(env, &physical, &prot,
-                                           gpa, access_type, mmu_idx);
+                                           gpa, access_type);
             if (ret != TLBRET_HOST_MATCH) {
                 if (probe) {
                     return false;
@@ -860,8 +860,7 @@ static inline hwaddr loongarch_get_host_address(CPULoongArchState *env, target_u
     hwaddr physical = 0;
     int prot, ret;
 
-    ret = loongarch_map_host_address(env, &physical, &prot, gpa, MMU_DATA_LOAD,
-                             MMU_KERNEL_IDX);
+    ret = loongarch_map_host_address(env, &physical, &prot, gpa, MMU_DATA_LOAD);
 
     if (ret != TLBRET_HOST_MATCH) {
         raise_mmu_exception(env, gpa, MMU_DATA_LOAD, ret);

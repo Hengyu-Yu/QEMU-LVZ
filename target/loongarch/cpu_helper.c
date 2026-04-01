@@ -164,14 +164,14 @@ bool loongarch_tlb_search(CPULoongArchState *env, target_ulong vaddr,
 
 int loongarch_map_host_address(CPULoongArchState *env, hwaddr *physical,
                                       int *prot, target_ulong gpa,
-                                      MMUAccessType access_type, int mmu_idx)
+                                      MMUAccessType access_type)
 {
     int match, index;
 
     match = loongarch_tlb_search(env, gpa, &index, false);
     if (match) {
         return TLBRET_HOST_MATCH + loongarch_map_tlb_entry(env, physical, prot,
-                                                           gpa, access_type, index, mmu_idx, false);
+                                                           gpa, access_type, index, MMU_KERNEL_IDX, false);
     }
     return TLBRET_HOST_NOMATCH;
 }

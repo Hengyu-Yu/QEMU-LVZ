@@ -68,7 +68,7 @@ bool loongarch_tlb_search(CPULoongArchState *env, target_ulong vaddr,
 bool loongarch_guest_has_interrupt(CPULoongArchState *env);
 int loongarch_map_host_address(CPULoongArchState *env, hwaddr *physical,
                                       int *prot, target_ulong gpa,
-                                      MMUAccessType access_type, int mmu_idx);
+                                      MMUAccessType access_type);
 int get_physical_address(CPULoongArchState *env, hwaddr *physical,
                          int *prot, target_ulong address,
                          MMUAccessType access_type, int mmu_idx);

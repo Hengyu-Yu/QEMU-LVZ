@@ -71,7 +71,10 @@ static const struct TypeExcp excp_names[] = {
     {EXCCODE_BCE, "Bound Check Exception"},
     {EXCCODE_SXD, "128 bit vector instructions Disable exception"},
     {EXCCODE_ASXD, "256 bit vector instructions Disable exception"},
+    {EXCCODE_GSPR, "Guest Sensitive and Privileged Resources"},
     {EXCCODE_HVC, "Hypervisor call"},
+    {EXCCODE_GCSC, "Guest CSR visited by Software"},
+    {EXCCODE_GCHC, "Guest CSR visited by HardWare"},
     {EXCP_HLT, "EXCP_HLT"},
 };
 
@@ -360,7 +363,7 @@ static void loongarch_cpu_do_interrupt(CPUState *cs)
                       "%s: PC " TARGET_FMT_lx " ERA " TARGET_FMT_lx
                       " cause %d%s\n, ESTAT " TARGET_FMT_lx
                       " EXCFG " TARGET_FMT_lx " BADVA " TARGET_FMT_lx
-                      "BADI " TARGET_FMT_lx " SYS_NUM " TARGET_FMT_lu
+                      " BADI " TARGET_FMT_lx " SYS_NUM " TARGET_FMT_lu
                       " cpu %d asid " TARGET_FMT_lx " guest mode: %d\n", __func__, env->pc,
                       tlbfill ? GET_CSR(env, TLBRERA) : GET_CSR(env, ERA),
                       cause, tlbfill ? "(refill)" : "", GET_CSR(env, ESTAT),
