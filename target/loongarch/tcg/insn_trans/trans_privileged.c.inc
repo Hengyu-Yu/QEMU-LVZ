@@ -588,6 +588,7 @@ static bool trans_invtlb(DisasContext *ctx, arg_invtlb *a)
     case 0x14:
     case 0x15:
     case 0x16:
+        //TODO: reify invalidate scope for these cases
         gen_helper_invtlb_all(tcg_env, rj, tcg_constant_i32(1), tcg_constant_i32(1));
         break;
     case 0xA:
