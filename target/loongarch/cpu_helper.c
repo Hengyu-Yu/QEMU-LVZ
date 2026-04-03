@@ -102,13 +102,8 @@ bool loongarch_tlb_search(CPULoongArchState *env, target_ulong vaddr,
     int i, compare_shift;
     uint64_t vpn, tlb_vppn;
 
-    if (guest) {
-        csr_asid = FIELD_EX64(env->GCSR_ASID, CSR_ASID, ASID);
-        stlb_ps = FIELD_EX64(env->GCSR_STLBPS, CSR_STLBPS, PS);
-    } else {
-        csr_asid = FIELD_EX64(env->CSR_ASID, CSR_ASID, ASID);
-        stlb_ps = FIELD_EX64(env->CSR_STLBPS, CSR_STLBPS, PS);
-    }
+    csr_asid = FIELD_EX64(GET_CSR_IF(guest, ASID), CSR_ASID, ASID);
+    stlb_ps = FIELD_EX64(GET_CSR_IF(guest, STLBPS), CSR_STLBPS, PS);
     vpn = (vaddr & TARGET_VIRT_MASK) >> (stlb_ps + 1);
     stlb_idx = vpn & 0xff; /* VA[25:15] <==> TLBIDX.index for 16KiB Page */
     compare_shift = stlb_ps + 1 - R_TLB_MISC_VPPN_SHIFT;
@@ -153,7 +148,7 @@ bool loongarch_tlb_search(CPULoongArchState *env, target_ulong vaddr,
             vpn = (vaddr & TARGET_VIRT_MASK) >> (tlb_ps + 1);
             if ((tlb_g == 1 || tlb_asid == csr_asid) &&
                 (vpn == (tlb_vppn >> compare_shift)) &&
-                tlb_gid == get_gid(env)) {
+                tlb_gid == get_tgid(env)) {
                 *index = i;
                 return true;
             }

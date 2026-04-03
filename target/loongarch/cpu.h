@@ -603,25 +603,6 @@ static inline bool has_lvz_capability(CPULoongArchState *env)
     return FIELD_EX32(env->cpucfg[2], CPUCFG2, LVZ);
 }
 
-static inline uint8_t get_gid(CPULoongArchState *env)
-{
-    if (env->guest) {
-        return FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, GID);
-    }
-    return 0;
-}
-
-static inline uint8_t get_tgid(CPULoongArchState *env)
-{
-    /* Check if GTLBC.USETGID is set */
-    if (FIELD_EX64(env->CSR_GTLBC, CSR_GTLBC, USETGID)) {
-        return FIELD_EX64(env->CSR_GTLBC, CSR_GTLBC, TGID);
-    }
-    
-    /* Use current effective GID */
-    return get_gid(env);
-}
-
 static inline bool will_return_to_guest(CPULoongArchState *env)
 {
 
@@ -635,6 +616,26 @@ static inline bool will_return_to_guest(CPULoongArchState *env)
         return true;
     }
     return FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, PGM);
+}
+
+static inline uint8_t get_gid(CPULoongArchState *env)
+{
+    return FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, GID);
+}
+
+static inline uint8_t get_tgid(CPULoongArchState *env)
+{
+    if (env->guest) {
+        return get_gid(env);
+    }
+
+    /* Check if GTLBC.USETGID is set */
+    if (FIELD_EX64(env->CSR_GTLBC, CSR_GTLBC, USETGID)) {
+        return FIELD_EX64(env->CSR_GTLBC, CSR_GTLBC, TGID);
+    } else if (will_return_to_guest(env)) {
+        return get_gid(env);
+    }
+    return 0;
 }
 
 void trigger_vm_exit(CPULoongArchState *env);

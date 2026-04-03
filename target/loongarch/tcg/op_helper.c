@@ -154,12 +154,10 @@ void helper_idle(CPULoongArchState *env)
     do_raise_exception(env, EXCP_HLT, 0);
 }
 
-
 /* Hypervisor call helper */
 void helper_hvcl(CPULoongArchState *env, uint32_t code)
 {
     if (env->guest == 0) {
-        /* HVCL from host mode should be treated as illegal instruction */
         do_raise_exception(env, EXCCODE_INE, GETPC());
         return;
     }
