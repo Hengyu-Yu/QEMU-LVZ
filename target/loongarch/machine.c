@@ -147,21 +147,6 @@ static bool lvz_needed(void *opaque)
     LoongArchCPU *cpu = opaque;
     return FIELD_EX32(cpu->env.cpucfg[2], CPUCFG2, LVZ);
 }
-/*
-static const VMStateDescription vmstate_vm_exit_ctx = {
-    .name = "cpu/lvz/vm_exit_ctx",
-    .version_id = 1,
-    .minimum_version_id = 1,
-    .fields = (const VMStateField[]) {
-        VMSTATE_UINT64(fault_gpa, VMExitContext),
-        VMSTATE_UINT64(fault_gva, VMExitContext),
-        VMSTATE_UINT8(gid, VMExitContext),
-        VMSTATE_UINT32(exit_reason, VMExitContext),
-        VMSTATE_UINT32(access_type, VMExitContext),
-        VMSTATE_BOOL(is_tlb_refill, VMExitContext),
-        VMSTATE_END_OF_LIST()
-    }
-};*/
 
 static const VMStateDescription vmstate_lvz = {
     .name = "cpu/lvz",

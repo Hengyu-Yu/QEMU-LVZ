@@ -27,8 +27,7 @@ static int loongarch_map_tlb_entry(CPULoongArchState *env, hwaddr *physical,
     if (index >= LOONGARCH_STLB) {
         tlb_ps = FIELD_EX64(tlb->tlb_misc, TLB_MISC, PS);
     } else {
-        tlb_ps = guest ? FIELD_EX64(env->GCSR_STLBPS, CSR_STLBPS, PS)
-                       : FIELD_EX64(env->CSR_STLBPS, CSR_STLBPS, PS);
+        tlb_ps = FIELD_EX64(GET_CSR_IF(guest, STLBPS), CSR_STLBPS, PS);
     }
     n = (address >> tlb_ps) & 0x1;/* Odd or even */
 
@@ -94,7 +93,7 @@ static int loongarch_map_tlb_entry(CPULoongArchState *env, hwaddr *physical,
  * virt_vpn = vaddr[47:13]
  */
 bool loongarch_tlb_search(CPULoongArchState *env, target_ulong vaddr,
-                          int *index, bool guest)
+                          int *index, bool guest, int gid)
 {
     LoongArchTLB *tlb;
     uint16_t csr_asid, tlb_asid, stlb_idx;
@@ -123,7 +122,7 @@ bool loongarch_tlb_search(CPULoongArchState *env, target_ulong vaddr,
             tlb_g = FIELD_EX64(tlb->tlb_entry0, TLBENTRY, G);
             if ((tlb_g == 1 || tlb_asid == csr_asid) &&
                 (vpn == (tlb_vppn >> compare_shift)) &&
-                tlb_gid == get_gid(env)) {
+                (tlb_gid == gid)) {
                 *index = i * 256 + stlb_idx;
                 return true;
             }
@@ -148,7 +147,7 @@ bool loongarch_tlb_search(CPULoongArchState *env, target_ulong vaddr,
             vpn = (vaddr & TARGET_VIRT_MASK) >> (tlb_ps + 1);
             if ((tlb_g == 1 || tlb_asid == csr_asid) &&
                 (vpn == (tlb_vppn >> compare_shift)) &&
-                tlb_gid == get_tgid(env)) {
+                (tlb_gid == gid)) {
                 *index = i;
                 return true;
             }
@@ -163,7 +162,7 @@ int loongarch_map_host_address(CPULoongArchState *env, hwaddr *physical,
 {
     int match, index;
 
-    match = loongarch_tlb_search(env, gpa, &index, false);
+    match = loongarch_tlb_search(env, gpa, &index, false, get_tgid(env));
     if (match) {
         return TLBRET_HOST_MATCH + loongarch_map_tlb_entry(env, physical, prot,
                                                            gpa, access_type, index, MMU_KERNEL_IDX, false);
@@ -177,7 +176,7 @@ static int loongarch_map_address(CPULoongArchState *env, hwaddr *physical,
 {
     int index, match;
 
-    match = loongarch_tlb_search(env, address, &index, env->guest);
+    match = loongarch_tlb_search(env, address, &index, env->guest, get_tgid(env));
     if (match) {
         return loongarch_map_tlb_entry(env, physical, prot,
                                         address, access_type, index, mmu_idx, env->guest);
