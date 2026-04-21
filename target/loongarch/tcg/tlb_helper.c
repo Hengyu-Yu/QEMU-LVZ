@@ -258,7 +258,7 @@ void helper_tlbsrch(CPULoongArchState *env)
     }
 
     /* Search only in TLB entries that belong to current guest context */
-    match = loongarch_tlb_search(env, search_ehi, &index, env->guest);
+    match = loongarch_tlb_search(env, search_ehi, &index, env->guest, get_tgid(env));
 
     if (match) {
         SET_CSR_IF(env->guest, TLBIDX, FIELD_DP64(GET_CSR_IF(env->guest, TLBIDX), CSR_TLBIDX, INDEX, index));
@@ -287,7 +287,7 @@ void helper_gtlbsrch(CPULoongArchState *env)
     }
 
     /* Search only in TLB entries that belong to current guest context */
-    match = loongarch_tlb_search(env, search_ehi, &index, true);
+    match = loongarch_tlb_search(env, search_ehi, &index, true, get_tgid(env));
 
     if (match) {
         env->GCSR_TLBIDX = FIELD_DP64(env->GCSR_TLBIDX, CSR_TLBIDX, INDEX, index);
@@ -677,136 +677,315 @@ void helper_gtlbflush(CPULoongArchState *env)
     tlb_flush(env_cpu(env));
 }
 
-void helper_invtlb_all(CPULoongArchState *env, target_ulong info, uint32_t current_only, uint32_t to_guest)
+static void invtlb_invalidate_entry(CPULoongArchState *env, int index,
+                                    bool guest)
 {
-    if (to_guest) {
+    LoongArchTLB *tlb = guest ? &env->gtlb[index] : &env->tlb[index];
+    tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc, TLB_MISC, E, 0);
+}
+
+/*
+ * INVTLB op=0x0: Flush all entries (host + guest TLB).
+ * INVTLB op=0x1: Flush host TLB only. In guest mode, flush own entries.
+ * INVTLB op=0x9/0x13: Flush guest TLB entries by register GID.
+ *
+ * to_guest values:
+ *   0 = host/guest self (op 0x1)
+ *   1 = guest by register GID (op 0x9, 0x13)
+ *   2 = flush all including guest TLB (op 0x0)
+ */
+void helper_invtlb_all(CPULoongArchState *env, target_ulong info,
+                       uint32_t to_guest)
+{
+    if (to_guest && env->guest) {
+        do_raise_exception(env, EXCCODE_IPE, GETPC());
+    }
+
+    if (to_guest == 2) {
+        /* op 0x0 */
         if (env->guest) {
-            do_raise_exception(env, EXCCODE_IPE, GETPC());
+            for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
+                if (tlb_entry_matches_guest(env, &env->gtlb[i])) {
+                    invtlb_invalidate_entry(env, i, true);
+                }
+            }
+        } else {
+            for (int i = 0; i < LOONGARCH_TLB_AND_GTLB_MAX; i++) {
+                invtlb_invalidate_entry(env, i, false);
+            }
         }
-        current_only = 1;
-    }
-
-    uint16_t gid = to_guest ? ((info >> 16) & 0xff) : get_tgid(env);
-
-    for (int i = 0; i < LOONGARCH_TLB_AND_GTLB_MAX; i++) {
-        if (current_only == 0 || tlb_entry_matches_gid(&env->tlb[i], gid)) {
-            env->tlb[i].tlb_misc = FIELD_DP64(env->tlb[i].tlb_misc,
-                                              TLB_MISC, E, 0);
+    } else if (to_guest == 1 || env->guest) {
+        uint16_t gid = env->guest ? get_tgid(env) : (info >> 16) & 0xff;
+        for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
+            if (tlb_entry_matches_gid(&env->gtlb[i], gid)) {
+                invtlb_invalidate_entry(env, i, true);
+            }
+        }
+    } else {
+        for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
+            invtlb_invalidate_entry(env, i, false);
         }
     }
     tlb_flush(env_cpu(env));
 }
 
-void helper_invtlb_all_g(CPULoongArchState *env, target_ulong info, uint32_t g, uint32_t to_guest)
+/*
+ * INVTLB op=0x2/0x3: Flush all entries with G=1 (0x2) or G=0 (0x3).
+ * In host mode, flush matching host TLB entries.
+ * In guest mode, flush only this guest's matching entries.
+ */
+void helper_invtlb_all_g(CPULoongArchState *env, target_ulong info,
+                          uint32_t g, uint32_t to_guest)
 {
     if (to_guest && env->guest) {
         do_raise_exception(env, EXCCODE_IPE, GETPC());
     }
-    uint16_t gid = to_guest ? ((info >> 16) & 0xff) : get_tgid(env);
 
-    for (int i = 0; i < LOONGARCH_TLB_AND_GTLB_MAX; i++) {
-        LoongArchTLB *tlb = &env->tlb[i];
-        uint8_t tlb_g = FIELD_EX64(tlb->tlb_entry0, TLBENTRY, G);
-
-        if (tlb_g == g && tlb_entry_matches_gid(tlb, gid)) {
-            tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc, TLB_MISC, E, 0);
+    if (to_guest || env->guest) {
+        uint16_t gid = env->guest ? get_tgid(env) : (info >> 16) & 0xff;
+        for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
+            LoongArchTLB *tlb = &env->gtlb[i];
+            uint8_t tlb_g = FIELD_EX64(tlb->tlb_entry0, TLBENTRY, G);
+            if (tlb_g == g && tlb_entry_matches_gid(tlb, gid)) {
+                invtlb_invalidate_entry(env, i, true);
+            }
+        }
+    } else {
+        for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
+            LoongArchTLB *tlb = &env->tlb[i];
+            uint8_t tlb_g = FIELD_EX64(tlb->tlb_entry0, TLBENTRY, G);
+            if (tlb_g == g) {
+                invtlb_invalidate_entry(env, i, false);
+            }
         }
     }
     tlb_flush(env_cpu(env));
 }
 
-void helper_invtlb_all_asid(CPULoongArchState *env, target_ulong info, uint32_t to_guest)
+/*
+ * INVTLB op=0x4: Flush all G=0 entries with matching ASID.
+ * INVTLB op=0xC: Flush all G=0 entries with matching ASID and GID.
+ */
+void helper_invtlb_all_asid(CPULoongArchState *env, target_ulong info,
+                             uint32_t to_guest)
 {
     if (to_guest && env->guest) {
         do_raise_exception(env, EXCCODE_IPE, GETPC());
     }
-    uint16_t asid = info & R_CSR_ASID_ASID_MASK;
-    uint16_t gid = to_guest ? ((info >> 16) & 0xff) : get_tgid(env);
 
-    for (int i = 0; i < LOONGARCH_TLB_AND_GTLB_MAX; i++) {
-        LoongArchTLB *tlb = &env->tlb[i];
-        uint8_t tlb_g = FIELD_EX64(tlb->tlb_entry0, TLBENTRY, G);
-        uint16_t tlb_asid = FIELD_EX64(tlb->tlb_misc, TLB_MISC, ASID);
+    uint16_t asid = info & 0x3ff;
 
-        if (!tlb_g && (tlb_asid == asid)  && tlb_entry_matches_gid(tlb, gid)) {
-            tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc, TLB_MISC, E, 0);
+    if (to_guest || env->guest) {
+        uint16_t gid = env->guest ? get_tgid(env) : (info >> 16) & 0xff;
+        for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
+            LoongArchTLB *tlb = &env->gtlb[i];
+            uint8_t tlb_g = FIELD_EX64(tlb->tlb_entry0, TLBENTRY, G);
+            uint16_t tlb_asid = FIELD_EX64(tlb->tlb_misc, TLB_MISC, ASID);
+            if (!tlb_g && tlb_asid == asid &&
+                tlb_entry_matches_gid(tlb, gid)) {
+                invtlb_invalidate_entry(env, i, true);
+            }
+        }
+    } else {
+        for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
+            LoongArchTLB *tlb = &env->tlb[i];
+            uint8_t tlb_g = FIELD_EX64(tlb->tlb_entry0, TLBENTRY, G);
+            uint16_t tlb_asid = FIELD_EX64(tlb->tlb_misc, TLB_MISC, ASID);
+            if (!tlb_g && tlb_asid == asid) {
+                invtlb_invalidate_entry(env, i, false);
+            }
         }
     }
     tlb_flush(env_cpu(env));
 }
 
+static bool invtlb_page_match(LoongArchTLB *tlb, target_ulong addr,
+                              bool guest, CPULoongArchState *env)
+{
+    uint64_t vpn, tlb_vppn;
+    uint8_t tlb_ps, compare_shift;
+
+    if (guest ? (tlb >= env->gtlb + LOONGARCH_STLB && tlb < env->gtlb + LOONGARCH_TLB_MAX) :
+                (tlb >= env->tlb + LOONGARCH_STLB && tlb < env->tlb + LOONGARCH_TLB_MAX)) {
+        tlb_ps = FIELD_EX64(tlb->tlb_misc, TLB_MISC, PS);
+    } else {
+        tlb_ps = FIELD_EX64(guest ? env->GCSR_STLBPS : GET_CSR_IF(env->guest, STLBPS),
+                            CSR_STLBPS, PS);
+    }
+    tlb_vppn = FIELD_EX64(tlb->tlb_misc, TLB_MISC, VPPN);
+    vpn = (addr & TARGET_VIRT_MASK) >> (tlb_ps + 1);
+    compare_shift = tlb_ps + 1 - R_TLB_MISC_VPPN_SHIFT;
+    return vpn == (tlb_vppn >> compare_shift);
+}
+
+/*
+ * INVTLB op=0x5: Flush G=0, ASID match, VA match.
+ * INVTLB op=0xD: Flush G=0, ASID match, VA match, GID match (guest).
+ */
 void helper_invtlb_page_asid(CPULoongArchState *env, target_ulong info,
-                             target_ulong addr, uint32_t to_guest)
+                              target_ulong addr, uint32_t to_guest)
 {
     if (to_guest && env->guest) {
         do_raise_exception(env, EXCCODE_IPE, GETPC());
     }
+
     uint16_t asid = info & 0x3ff;
-    uint16_t gid = to_guest ? ((info >> 16) & 0xff) : get_tgid(env);
 
-    for (int i = 0; i < LOONGARCH_TLB_AND_GTLB_MAX; i++) {
-        LoongArchTLB *tlb = &env->tlb[i];
-        uint8_t tlb_g = FIELD_EX64(tlb->tlb_entry0, TLBENTRY, G);
-        uint16_t tlb_asid = FIELD_EX64(tlb->tlb_misc, TLB_MISC, ASID);
-        uint64_t vpn, tlb_vppn;
-        uint8_t tlb_ps, compare_shift;
-
-        if (!tlb_entry_matches_gid(tlb, gid)) {
-            continue;
-        }
-
-        if ((i >= LOONGARCH_STLB && i < LOONGARCH_TLB_MAX)
-            || (i >= LOONGARCH_TLB_MAX + LOONGARCH_STLB && i < LOONGARCH_TLB_AND_GTLB_MAX)) {
-            tlb_ps = FIELD_EX64(tlb->tlb_misc, TLB_MISC, PS);
-        } else {
-            tlb_ps = FIELD_EX64(to_guest ? env->GCSR_STLBPS : GET_CSR_IF(env->guest, STLBPS), CSR_STLBPS, PS);
-        }
-        tlb_vppn = FIELD_EX64(tlb->tlb_misc, TLB_MISC, VPPN);
-        vpn = (addr & TARGET_VIRT_MASK) >> (tlb_ps + 1);
-        compare_shift = tlb_ps + 1 - R_TLB_MISC_VPPN_SHIFT;
-
-        if (!tlb_g && (tlb_asid == asid) &&
-            (vpn == (tlb_vppn >> compare_shift))) {
-            tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc, TLB_MISC, E, 0);
+    if (to_guest || env->guest) {
+        uint16_t gid = env->guest ? get_tgid(env) : (info >> 16) & 0xff;
+        for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
+            LoongArchTLB *tlb = &env->gtlb[i];
+            uint8_t tlb_g = FIELD_EX64(tlb->tlb_entry0, TLBENTRY, G);
+            uint16_t tlb_asid = FIELD_EX64(tlb->tlb_misc, TLB_MISC, ASID);
+            if (!tlb_entry_matches_gid(tlb, gid)) {
+                continue;
             }
+            if (!tlb_g && tlb_asid == asid &&
+                invtlb_page_match(tlb, addr, true, env)) {
+                invtlb_invalidate_entry(env, i, true);
+            }
+        }
+    } else {
+        for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
+            LoongArchTLB *tlb = &env->tlb[i];
+            uint8_t tlb_g = FIELD_EX64(tlb->tlb_entry0, TLBENTRY, G);
+            uint16_t tlb_asid = FIELD_EX64(tlb->tlb_misc, TLB_MISC, ASID);
+            if (!tlb_g && tlb_asid == asid &&
+                invtlb_page_match(tlb, addr, false, env)) {
+                invtlb_invalidate_entry(env, i, false);
+            }
+        }
     }
     tlb_flush(env_cpu(env));
 }
 
+/*
+ * INVTLB op=0x6: Flush (G=1 OR ASID=asid) AND VA match (host).
+ * INVTLB op=0xE: Flush (G=1 OR ASID=asid) AND VA match, with GID (guest).
+ */
 void helper_invtlb_page_asid_or_g(CPULoongArchState *env,
-                                  target_ulong info, target_ulong addr, uint32_t to_guest)
+                                   target_ulong info, target_ulong addr,
+                                   uint32_t to_guest)
 {
     if (to_guest && env->guest) {
         do_raise_exception(env, EXCCODE_IPE, GETPC());
     }
+
     uint16_t asid = info & 0x3ff;
-    uint16_t gid = to_guest ? ((info >> 16) & 0xff) : get_tgid(env);
 
-    for (int i = 0; i < LOONGARCH_TLB_AND_GTLB_MAX; i++) {
+    if (to_guest || env->guest) {
+        uint16_t gid = env->guest ? get_tgid(env) : (info >> 16) & 0xff;
+        for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
+            LoongArchTLB *tlb = &env->gtlb[i];
+            uint8_t tlb_g = FIELD_EX64(tlb->tlb_entry0, TLBENTRY, G);
+            uint16_t tlb_asid = FIELD_EX64(tlb->tlb_misc, TLB_MISC, ASID);
+            if (!tlb_entry_matches_gid(tlb, gid)) {
+                continue;
+            }
+            if ((tlb_g || tlb_asid == asid) &&
+                invtlb_page_match(tlb, addr, true, env)) {
+                invtlb_invalidate_entry(env, i, true);
+            }
+        }
+    } else {
+        for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
+            LoongArchTLB *tlb = &env->tlb[i];
+            uint8_t tlb_g = FIELD_EX64(tlb->tlb_entry0, TLBENTRY, G);
+            uint16_t tlb_asid = FIELD_EX64(tlb->tlb_misc, TLB_MISC, ASID);
+            if ((tlb_g || tlb_asid == asid) &&
+                invtlb_page_match(tlb, addr, false, env)) {
+                invtlb_invalidate_entry(env, i, false);
+            }
+        }
+    }
+    tlb_flush(env_cpu(env));
+}
+
+/*
+ * INVTLB op=0x10: Flush all guest TLB entries with current TGID.
+ * INVTLB op=0x11: Flush all shadow TLB entries with current TGID.
+ * INVTLB op=0x12: Flush both guest and shadow TLB entries with current TGID.
+ *
+ * type values:
+ *   0 = guest only (op 0x10)
+ *   1 = shadow only (op 0x11)
+ *   2 = guest + shadow (op 0x12)
+ */
+void helper_invtlb_tgid(CPULoongArchState *env, uint32_t type)
+{
+    if (env->guest) {
+        do_raise_exception(env, EXCCODE_IPE, GETPC());
+    }
+
+    if (type == 0 || type == 2) {
+        for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
+            invtlb_invalidate_entry(env, i, true);
+        }
+    }
+
+    if (type == 1 || type == 2) {
+        for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
+            invtlb_invalidate_entry(env, i, false);
+        }
+    }
+
+    tlb_flush(env_cpu(env));
+}
+
+/*
+ * INVTLB op=0x14: Flush all shadow TLB entries with register GID.
+ * INVTLB op=0x15: Flush both guest and shadow TLB entries with register GID.
+ *
+ * type values:
+ *   0 = shadow only (op 0x14)
+ *   1 = guest + shadow (op 0x15)
+ */
+void helper_invtlb_gid_shadow(CPULoongArchState *env, target_ulong info,
+                               uint32_t type)
+{
+    if (env->guest) {
+        do_raise_exception(env, EXCCODE_IPE, GETPC());
+    }
+
+    uint16_t gid = (info >> 16) & 0xff;
+
+    if (type == 1) {
+        for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
+            if (tlb_entry_matches_gid(&env->gtlb[i], gid)) {
+                invtlb_invalidate_entry(env, i, true);
+            }
+        }
+    }
+
+    for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
+        if (tlb_entry_matches_gid(&env->tlb[i], gid)) {
+            invtlb_invalidate_entry(env, i, false);
+        }
+    }
+
+    tlb_flush(env_cpu(env));
+}
+
+/*
+ * INVTLB op=0x16: Flush shadow TLB entries with register GID and GPA match.
+ */
+void helper_invtlb_shadow_gid_gpa(CPULoongArchState *env, target_ulong info,
+                                   target_ulong addr, uint32_t unused)
+{
+    if (env->guest) {
+        do_raise_exception(env, EXCCODE_IPE, GETPC());
+    }
+
+    uint16_t gid = (info >> 16) & 0xff;
+
+    for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
         LoongArchTLB *tlb = &env->tlb[i];
-        uint8_t tlb_g = FIELD_EX64(tlb->tlb_entry0, TLBENTRY, G);
-        uint16_t tlb_asid = FIELD_EX64(tlb->tlb_misc, TLB_MISC, ASID);
-        uint64_t vpn, tlb_vppn;
-        uint8_t tlb_ps, compare_shift;
-
         if (!tlb_entry_matches_gid(tlb, gid)) {
             continue;
         }
-
-        if ((i >= LOONGARCH_STLB && i < LOONGARCH_TLB_MAX)
-            || (i >= LOONGARCH_TLB_MAX + LOONGARCH_STLB && i < LOONGARCH_TLB_AND_GTLB_MAX)) {
-            tlb_ps = FIELD_EX64(tlb->tlb_misc, TLB_MISC, PS);
-        } else {
-            tlb_ps = FIELD_EX64(to_guest ? env->GCSR_STLBPS : GET_CSR_IF(env->guest, STLBPS), CSR_STLBPS, PS);
+        if (invtlb_page_match(tlb, addr, false, env)) {
+            invtlb_invalidate_entry(env, i, false);
         }
-        tlb_vppn = FIELD_EX64(tlb->tlb_misc, TLB_MISC, VPPN);
-        vpn = (addr & TARGET_VIRT_MASK) >> (tlb_ps + 1);
-        compare_shift = tlb_ps + 1 - R_TLB_MISC_VPPN_SHIFT;
-
-        if ((tlb_g || (tlb_asid == asid)) &&
-            (vpn == (tlb_vppn >> compare_shift))) {
-            tlb->tlb_misc = FIELD_DP64(tlb->tlb_misc, TLB_MISC, E, 0);
-            }
     }
     tlb_flush(env_cpu(env));
 }
@@ -821,7 +1000,6 @@ bool loongarch_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
     int prot, host_prot;
     int ret;
 
-    /* Data access */
     ret = get_physical_address(env, &physical, &prot, address,
                                access_type, mmu_idx);
 
@@ -839,12 +1017,6 @@ bool loongarch_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
                 cpu_loop_exit_restore(cs, retaddr);
                 return false;
             }
-            /*
-             * Combine guest and host protection bits.
-             * In nested paging, final access rights are AND of both stages.
-             * Guest TLB provides the primary access control,
-             * Host TLB provides the secondary access control.
-             */
             prot &= host_prot;
         }
 

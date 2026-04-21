@@ -135,6 +135,10 @@ void helper_ertn(CPULoongArchState *env)
     env->lladdr = 1;
     if (will_return_to_guest(env)) {
         env->guest = true;
+        for (int i = 0; i < LOONGARCH_TLB_MAX; i++) {
+            env->gtlb[i].tlb_misc = FIELD_DP64(env->gtlb[i].tlb_misc, TLB_MISC, E, 0);
+        }
+        tlb_flush(env_cpu(env));
         cpu_loongarch_set_guest_timer(env_archcpu(env), true);
         bql_lock();
         if (loongarch_guest_has_interrupt(env)) {

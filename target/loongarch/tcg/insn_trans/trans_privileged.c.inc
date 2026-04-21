@@ -184,7 +184,7 @@ static const CSRInfo csr_info[] = {
     CSR_OFF(DSAVE),
     CSR_OFF(GTLBC),
     CSR_OFF(TRGP),
-    CSR_OFF(GSTAT),
+    CSR_OFF_FUNCS(GSTAT, 0, NULL, gen_helper_csrwr_gstat),
     CSR_OFF(GCFG),
     CSR_OFF_FUNCS(GINTC, CSRFL_IO, NULL, gen_helper_csrwr_gintc),
     CSR_OFF(GCNTC),
@@ -558,18 +558,24 @@ static bool trans_invtlb(DisasContext *ctx, arg_invtlb *a)
         return false;
     }
 
-    if (!avail_LVZ(ctx) && (a->imm > 0x6)) return false;
+    if (!avail_LVZ(ctx) && (a->imm > 0x6)) {
+        return false;
+    }
 
     switch (a->imm) {
     case 0x0:
+        gen_helper_invtlb_all(tcg_env, rj, tcg_constant_i32(8));
+        break;
     case 0x1:
-        gen_helper_invtlb_all(tcg_env, rj, tcg_constant_i32(a->imm), tcg_constant_i32(0));
+        gen_helper_invtlb_all(tcg_env, rj, tcg_constant_i32(0));
         break;
     case 0x2:
-        gen_helper_invtlb_all_g(tcg_env, rj, tcg_constant_i32(1), tcg_constant_i32(0));
+        gen_helper_invtlb_all_g(tcg_env, rj, tcg_constant_i32(1),
+                                tcg_constant_i32(0));
         break;
     case 0x3:
-        gen_helper_invtlb_all_g(tcg_env, rj, tcg_constant_i32(0), tcg_constant_i32(0));
+        gen_helper_invtlb_all_g(tcg_env, rj, tcg_constant_i32(0),
+                                tcg_constant_i32(0));
         break;
     case 0x4:
         gen_helper_invtlb_all_asid(tcg_env, rj, tcg_constant_i32(0));
@@ -578,24 +584,20 @@ static bool trans_invtlb(DisasContext *ctx, arg_invtlb *a)
         gen_helper_invtlb_page_asid(tcg_env, rj, rk, tcg_constant_i32(0));
         break;
     case 0x6:
-        gen_helper_invtlb_page_asid_or_g(tcg_env, rj, rk, tcg_constant_i32(0));
+        gen_helper_invtlb_page_asid_or_g(tcg_env, rj, rk,
+                                         tcg_constant_i32(0));
         break;
     case 0x9:
-    case 0x10:
-    case 0x11:
-    case 0x12:
     case 0x13:
-    case 0x14:
-    case 0x15:
-    case 0x16:
-        //TODO: reify invalidate scope for these cases
-        gen_helper_invtlb_all(tcg_env, rj, tcg_constant_i32(1), tcg_constant_i32(1));
+        gen_helper_invtlb_all(tcg_env, rj, tcg_constant_i32(1));
         break;
     case 0xA:
-        gen_helper_invtlb_all_g(tcg_env, rj, tcg_constant_i32(1), tcg_constant_i32(1));
+        gen_helper_invtlb_all_g(tcg_env, rj, tcg_constant_i32(1),
+                                tcg_constant_i32(1));
         break;
     case 0xB:
-        gen_helper_invtlb_all_g(tcg_env, rj, tcg_constant_i32(0), tcg_constant_i32(1));
+        gen_helper_invtlb_all_g(tcg_env, rj, tcg_constant_i32(0),
+                                tcg_constant_i32(1));
         break;
     case 0xC:
         gen_helper_invtlb_all_asid(tcg_env, rj, tcg_constant_i32(1));
@@ -604,9 +606,27 @@ static bool trans_invtlb(DisasContext *ctx, arg_invtlb *a)
         gen_helper_invtlb_page_asid(tcg_env, rj, rk, tcg_constant_i32(1));
         break;
     case 0xE:
-        gen_helper_invtlb_page_asid_or_g(tcg_env, rj, rk, tcg_constant_i32(1));
+        gen_helper_invtlb_page_asid_or_g(tcg_env, rj, rk,
+                                         tcg_constant_i32(1));
         break;
-
+    case 0x10:
+        gen_helper_invtlb_tgid(tcg_env, tcg_constant_i32(0));
+        break;
+    case 0x11:
+        gen_helper_invtlb_tgid(tcg_env, tcg_constant_i32(1));
+        break;
+    case 0x12:
+        gen_helper_invtlb_tgid(tcg_env, tcg_constant_i32(2));
+        break;
+    case 0x14:
+        gen_helper_invtlb_gid_shadow(tcg_env, rj, tcg_constant_i32(0));
+        break;
+    case 0x15:
+        gen_helper_invtlb_gid_shadow(tcg_env, rj, tcg_constant_i32(1));
+        break;
+    case 0x16:
+        gen_helper_invtlb_shadow_gid_gpa(tcg_env, rj, rk, tcg_constant_i32(0));
+        break;
     default:
         return false;
     }
