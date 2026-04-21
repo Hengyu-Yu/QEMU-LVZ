@@ -168,7 +168,7 @@ static void invalidate_tlb_entry(CPULoongArchState *env, int index, bool guest)
     }
 
     if (tlb_v1) {
-        addr = (tlb_vppn << R_TLB_MISC_VPPN_SHIFT) & pagesize;    /* odd */
+        addr = ((tlb_vppn << R_TLB_MISC_VPPN_SHIFT) & ~mask) | pagesize;    /* odd */
         tlb_flush_range_by_mmuidx(env_cpu(env), addr, pagesize,
                                   mmu_idx, TARGET_LONG_BITS);
     }
@@ -233,6 +233,11 @@ static void fill_tlb_entry(CPULoongArchState *env, int index, bool guest)
 
     tlb->tlb_entry0 = lo0;
     tlb->tlb_entry1 = lo1;
+
+    qemu_log("FILL_TLB idx=%d g=%d misc=%016lx"
+             " e0=%016lx e1=%016lx tgid=%d\n",
+             index, guest, tlb->tlb_misc,
+             tlb->tlb_entry0, tlb->tlb_entry1, get_tgid(env));
 }
 
 /* Return an random value between low and high */
@@ -258,7 +263,7 @@ void helper_tlbsrch(CPULoongArchState *env)
     }
 
     /* Search only in TLB entries that belong to current guest context */
-    match = loongarch_tlb_search(env, search_ehi, &index, env->guest);
+    match = loongarch_tlb_search(env, search_ehi, &index, env->guest, get_tgid(env));
 
     if (match) {
         SET_CSR_IF(env->guest, TLBIDX, FIELD_DP64(GET_CSR_IF(env->guest, TLBIDX), CSR_TLBIDX, INDEX, index));
@@ -287,7 +292,7 @@ void helper_gtlbsrch(CPULoongArchState *env)
     }
 
     /* Search only in TLB entries that belong to current guest context */
-    match = loongarch_tlb_search(env, search_ehi, &index, true);
+    match = loongarch_tlb_search(env, search_ehi, &index, true, get_tgid(env));
 
     if (match) {
         env->GCSR_TLBIDX = FIELD_DP64(env->GCSR_TLBIDX, CSR_TLBIDX, INDEX, index);
@@ -679,11 +684,12 @@ void helper_gtlbflush(CPULoongArchState *env)
 
 void helper_invtlb_all(CPULoongArchState *env, target_ulong info, uint32_t current_only, uint32_t to_guest)
 {
-    if (to_guest) {
-        if (env->guest) {
-            do_raise_exception(env, EXCCODE_IPE, GETPC());
-        }
-        current_only = 1;
+    if (to_guest && env->guest) {
+        do_raise_exception(env, EXCCODE_IPE, GETPC());
+    }
+
+    if (to_guest && current_only == 0) {
+        do_raise_exception(env, EXCCODE_INE, GETPC());
     }
 
     uint16_t gid = to_guest ? ((info >> 16) & 0xff) : get_tgid(env);
@@ -756,7 +762,8 @@ void helper_invtlb_page_asid(CPULoongArchState *env, target_ulong info,
         }
 
         if ((i >= LOONGARCH_STLB && i < LOONGARCH_TLB_MAX)
-            || (i >= LOONGARCH_TLB_MAX + LOONGARCH_STLB && i < LOONGARCH_TLB_AND_GTLB_MAX)) {
+            || (i >= LOONGARCH_TLB_MAX + LOONGARCH_STLB
+            && i < LOONGARCH_TLB_AND_GTLB_MAX)) {
             tlb_ps = FIELD_EX64(tlb->tlb_misc, TLB_MISC, PS);
         } else {
             tlb_ps = FIELD_EX64(to_guest ? env->GCSR_STLBPS : GET_CSR_IF(env->guest, STLBPS), CSR_STLBPS, PS);
@@ -821,7 +828,6 @@ bool loongarch_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
     int prot, host_prot;
     int ret;
 
-    /* Data access */
     ret = get_physical_address(env, &physical, &prot, address,
                                access_type, mmu_idx);
 
@@ -839,12 +845,6 @@ bool loongarch_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
                 cpu_loop_exit_restore(cs, retaddr);
                 return false;
             }
-            /*
-             * Combine guest and host protection bits.
-             * In nested paging, final access rights are AND of both stages.
-             * Guest TLB provides the primary access control,
-             * Host TLB provides the secondary access control.
-             */
             prot &= host_prot;
         }
 

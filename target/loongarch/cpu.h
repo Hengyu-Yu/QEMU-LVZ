@@ -609,12 +609,6 @@ static inline bool will_return_to_guest(CPULoongArchState *env)
     if (!has_lvz_capability(env) || env->guest) {
         return false;
     }
-    if (FIELD_EX64(env->CSR_MERRCTL, CSR_MERRCTL, ISMERR) && FIELD_EX64(env->CSR_MERRCTL, CSR_MERRCTL, PGM)) {
-        return true;
-    }
-    if (FIELD_EX64(env->CSR_TLBRERA, CSR_TLBRERA, ISTLBR) && FIELD_EX64(env->CSR_TLBRPRMD, CSR_TLBRPRMD, PGM)) {
-        return true;
-    }
     return FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, PGM);
 }
 

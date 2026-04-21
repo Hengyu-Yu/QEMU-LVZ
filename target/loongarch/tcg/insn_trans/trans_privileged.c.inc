@@ -184,7 +184,7 @@ static const CSRInfo csr_info[] = {
     CSR_OFF(DSAVE),
     CSR_OFF(GTLBC),
     CSR_OFF(TRGP),
-    CSR_OFF(GSTAT),
+    CSR_OFF_FUNCS(GSTAT, 0, NULL, gen_helper_csrwr_gstat),
     CSR_OFF(GCFG),
     CSR_OFF_FUNCS(GINTC, CSRFL_IO, NULL, gen_helper_csrwr_gintc),
     CSR_OFF(GCNTC),
@@ -558,7 +558,9 @@ static bool trans_invtlb(DisasContext *ctx, arg_invtlb *a)
         return false;
     }
 
-    if (!avail_LVZ(ctx) && (a->imm > 0x6)) return false;
+    if (!avail_LVZ(ctx) && (a->imm > 0x6)) {
+        return false;
+    }
 
     switch (a->imm) {
     case 0x0:

@@ -64,7 +64,7 @@ void cpu_loongarch_store_constant_timer_config(LoongArchCPU *cpu,
                                                uint64_t value, bool guest);
 void loongarch_constant_timer_cb_guest(void *opaque);
 bool loongarch_tlb_search(CPULoongArchState *env, target_ulong vaddr,
-                          int *index, bool guest);
+                          int *index, bool guest, int gid);
 bool loongarch_guest_has_interrupt(CPULoongArchState *env);
 int loongarch_map_host_address(CPULoongArchState *env, hwaddr *physical,
                                       int *prot, target_ulong gpa,

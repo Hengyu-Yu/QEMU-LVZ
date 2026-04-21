@@ -27,8 +27,7 @@ static int loongarch_map_tlb_entry(CPULoongArchState *env, hwaddr *physical,
     if (index >= LOONGARCH_STLB) {
         tlb_ps = FIELD_EX64(tlb->tlb_misc, TLB_MISC, PS);
     } else {
-        tlb_ps = guest ? FIELD_EX64(env->GCSR_STLBPS, CSR_STLBPS, PS)
-                       : FIELD_EX64(env->CSR_STLBPS, CSR_STLBPS, PS);
+        tlb_ps = FIELD_EX64(GET_CSR_IF(guest, STLBPS), CSR_STLBPS, PS);
     }
     n = (address >> tlb_ps) & 0x1;/* Odd or even */
 
@@ -94,7 +93,7 @@ static int loongarch_map_tlb_entry(CPULoongArchState *env, hwaddr *physical,
  * virt_vpn = vaddr[47:13]
  */
 bool loongarch_tlb_search(CPULoongArchState *env, target_ulong vaddr,
-                          int *index, bool guest)
+                          int *index, bool guest, int gid)
 {
     LoongArchTLB *tlb;
     uint16_t csr_asid, tlb_asid, stlb_idx;
@@ -123,8 +122,10 @@ bool loongarch_tlb_search(CPULoongArchState *env, target_ulong vaddr,
             tlb_g = FIELD_EX64(tlb->tlb_entry0, TLBENTRY, G);
             if ((tlb_g == 1 || tlb_asid == csr_asid) &&
                 (vpn == (tlb_vppn >> compare_shift)) &&
-                tlb_gid == get_gid(env)) {
+                (tlb_gid == gid)) {
                 *index = i * 256 + stlb_idx;
+                if (guest)
+                    qemu_log("Found tlb index=%d tlb_misc=%016lx tlb_entry0=%016lx tlb_entry1=%016lx gid=%d asid=%d  stlbps=%d\n", *index, tlb->tlb_misc, tlb->tlb_entry0, tlb->tlb_entry1, gid, csr_asid, stlb_ps);
                 return true;
             }
         }
@@ -148,8 +149,10 @@ bool loongarch_tlb_search(CPULoongArchState *env, target_ulong vaddr,
             vpn = (vaddr & TARGET_VIRT_MASK) >> (tlb_ps + 1);
             if ((tlb_g == 1 || tlb_asid == csr_asid) &&
                 (vpn == (tlb_vppn >> compare_shift)) &&
-                tlb_gid == get_tgid(env)) {
+                (tlb_gid == gid)) {
                 *index = i;
+                if (guest)
+                    qemu_log("Found tlb index=%d tlb_misc=%016lx tlb_entry0=%016lx tlb_entry1=%016lx gid=%d asid=%d\n", *index, tlb->tlb_misc, tlb->tlb_entry0, tlb->tlb_entry1, gid, csr_asid);
                 return true;
             }
         }
@@ -163,11 +166,25 @@ int loongarch_map_host_address(CPULoongArchState *env, hwaddr *physical,
 {
     int match, index;
 
-    match = loongarch_tlb_search(env, gpa, &index, false);
+    match = loongarch_tlb_search(env, gpa, &index, false, get_tgid(env));
     if (match) {
-        return TLBRET_HOST_MATCH + loongarch_map_tlb_entry(env, physical, prot,
-                                                           gpa, access_type, index, MMU_KERNEL_IDX, false);
+        int ret = loongarch_map_tlb_entry(env, physical, prot,
+                                           gpa, access_type, index, MMU_KERNEL_IDX, false);
+        if (ret == TLBRET_MATCH) {
+            qemu_log("GPA->HPA: %016lx %016lx tgid=%d guest=%d\n",
+                     gpa, *physical, get_tgid(env), env->guest);
+        } else {
+            qemu_log("HOST_TLB_HIT_INV gpa=%016lx ret=%d tgid=%d guest=%d idx=%d"
+                     " e0=%016lx e1=%016lx misc=%016lx\n",
+                     gpa, TLBRET_HOST_MATCH + ret, get_tgid(env), env->guest, index,
+                     env->tlb[index].tlb_entry0, env->tlb[index].tlb_entry1,
+                     env->tlb[index].tlb_misc);
+        }
+        return TLBRET_HOST_MATCH + ret;
     }
+
+    qemu_log("HOST_TLB_MISS gpa=%016lx tgid=%d guest=%d\n",
+             gpa, get_tgid(env), env->guest);
     return TLBRET_HOST_NOMATCH;
 }
 
@@ -177,10 +194,19 @@ static int loongarch_map_address(CPULoongArchState *env, hwaddr *physical,
 {
     int index, match;
 
-    match = loongarch_tlb_search(env, address, &index, env->guest);
+    if (env->guest) {
+        qemu_log("Searching for GVA %016lx, access type=%d, mmu_idx=%d\n", address, access_type, mmu_idx);
+    }
+
+    match = loongarch_tlb_search(env, address, &index, env->guest, get_tgid(env));
     if (match) {
-        return loongarch_map_tlb_entry(env, physical, prot,
+        int ret = loongarch_map_tlb_entry(env, physical, prot,
                                         address, access_type, index, mmu_idx, env->guest);
+        if (env->guest && ret == TLBRET_MATCH) {
+            qemu_log("GVA->GPA: %016lx %016lx tgid=%d\n",
+                     address, *physical, get_tgid(env));
+        }
+        return ret;
     }
 
     return TLBRET_NOMATCH;

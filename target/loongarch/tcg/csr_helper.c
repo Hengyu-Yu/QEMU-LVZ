@@ -168,6 +168,16 @@ target_ulong helper_gcsrwr_ticlr(CPULoongArchState *env, target_ulong val)
     return old_v;
 }
 
+target_ulong helper_csrwr_gstat(CPULoongArchState *env, target_ulong val)
+{
+    int64_t old_v = env->CSR_GSTAT;
+
+    env->CSR_GSTAT = FIELD_DP64(env->CSR_GSTAT, CSR_GSTAT, PGM, FIELD_EX64(val, CSR_GSTAT, PGM));
+    env->CSR_GSTAT = FIELD_DP64(env->CSR_GSTAT, CSR_GSTAT, GID, FIELD_EX64(val, CSR_GSTAT, GID));
+
+    return old_v;
+}
+
 target_ulong helper_csrwr_gintc(CPULoongArchState *env, target_ulong val)
 {
     int64_t old_v = env->CSR_GINTC;

@@ -117,15 +117,12 @@ static vaddr loongarch_cpu_get_pc(CPUState *cs)
 
 void trigger_vm_exit(CPULoongArchState *env)
 {
+    qemu_log("VM_EXIT pc=%016lx gstat=%016lx crmd=%016lx\n",
+             env->pc, env->CSR_GSTAT,
+             FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, PGM));
     cpu_loongarch_set_guest_timer(env_archcpu(env), false);
-    if (FIELD_EX64(env->CSR_MERRCTL, CSR_MERRCTL, ISMERR)) {
-        env->CSR_MERRCTL = FIELD_DP64(env->CSR_MERRCTL, CSR_MERRCTL, PGM, 1);
-    } else if (FIELD_EX64(env->CSR_TLBRERA, CSR_TLBRERA, ISTLBR)) {
-        env->CSR_TLBRPRMD = FIELD_DP64(env->CSR_TLBRPRMD, CSR_TLBRPRMD, PGM, 1);
-    } else {
-        env->CSR_GSTAT = FIELD_DP64(env->CSR_GSTAT, CSR_GSTAT, PGM, 1);
-    }
-    env->vm_exit = true;
+    env->CSR_GSTAT = FIELD_DP64(env->CSR_GSTAT, CSR_GSTAT, PGM, 1);
+    env->vm_exit = 1;
 }
 
 #ifndef CONFIG_USER_ONLY
@@ -375,6 +372,7 @@ static void loongarch_cpu_do_interrupt(CPUState *cs)
     cs->exception_index = -1;
     if (env->vm_exit) {
         env->guest = 0;
+        cpu_reset_interrupt(cs, CPU_INTERRUPT_GUEST);
     }
     env->vm_exit = 0;
 }
@@ -664,7 +662,7 @@ static void loongarch_cpu_reset_hold(Object *obj, ResetType type)
 #ifdef CONFIG_TCG
     memset(env->tlb, 0, sizeof(env->tlb));
     /* Initialize LVZ CSRs */
-    env->CSR_GSTAT = 0;
+    env->CSR_GSTAT = FIELD_DP64(0, CSR_GSTAT, GIDBIT, 8);
     env->CSR_GCFG = 0;
     env->CSR_GINTC = 0;
     env->CSR_GCNTC = 0;
