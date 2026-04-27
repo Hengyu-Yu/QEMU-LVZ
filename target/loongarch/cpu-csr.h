@@ -215,7 +215,8 @@ FIELD(CSR_DBG, ECODE, 16, 6)
 /* LVZ (LoongArch Virtualization) CSRs */
 /* Guest Status and Control CSRs */
 #define LOONGARCH_CSR_GSTAT          0x50 /* Guest status */
-FIELD(CSR_GSTAT, PGM, 1, 1)     /* Virtualization mode */
+FIELD(CSR_GSTAT, VM, 0, 1)      /* Current virtualization mode */
+FIELD(CSR_GSTAT, PVM, 1, 1)     /* Previous virtualization mode */
 FIELD(CSR_GSTAT, GIDBIT, 4, 6)   /* Guest ID bits */
 FIELD(CSR_GSTAT, GID, 16, 8)      /* Guest ID */
 
@@ -245,11 +246,12 @@ FIELD(CSR_GINTC, HWIC, 16, 8)
 #define LOONGARCH_CSR_GCNTC          0x53 /* Guest counter compensation */
 
 /* Additional LVZ CSRs for second-level address translation */
-#define LOONGARCH_CSR_GTLBC          0x54   /* Guest TLB control */
-FIELD(CSR_GTLBC, TOTI, 0, 1)     /* Trap on TLB instruction */
-FIELD(CSR_GTLBC, USETGID, 1, 1)  /* Use Target GID */
-FIELD(CSR_GTLBC, TGID, 8, 8)     /* Target GID */
+#define LOONGARCH_CSR_GTLBC          0x15   /* Guest TLB control */
+FIELD(CSR_GTLBC, GMTLBSZ, 0, 6)
+FIELD(CSR_GTLBC, USETGID, 12, 1)  /* Use Target GID */
+FIELD(CSR_GTLBC, TOTI, 13, 1)     /* Trap on TLB instruction */
+FIELD(CSR_GTLBC, TGID, 16, 8)     /* Target GID */
 
-#define LOONGARCH_CSR_TRGP           0x55   /* Trapped guest physical address */
+#define LOONGARCH_CSR_TRGP           0x16   /* Trapped guest physical address */
 
 #endif /* LOONGARCH_CPU_CSR_H */

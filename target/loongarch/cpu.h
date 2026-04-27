@@ -549,7 +549,7 @@ static inline bool is_va32(CPULoongArchState *env)
     /* VA32 if !LA64 or VA32L[1-3] */
     bool va32 = !is_la64(env);
     uint64_t plv = FIELD_EX64(GET_CSR_IF(env->guest, CRMD), CSR_CRMD, PLV);
-    if (plv >= 1 && (FIELD_EX64(env->CSR_MISC, CSR_MISC, VA32) & (1 << plv))) {
+    if (plv >= 1 && (FIELD_EX64(GET_CSR_IF(env->guest, MISC), CSR_MISC, VA32) & (1 << plv))) {
         va32 = true;
     }
     return va32;
@@ -609,7 +609,7 @@ static inline bool will_return_to_guest(CPULoongArchState *env)
     if (!has_lvz_capability(env) || env->guest) {
         return false;
     }
-    return FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, PGM);
+    return FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, PVM);
 }
 
 static inline uint8_t get_gid(CPULoongArchState *env)

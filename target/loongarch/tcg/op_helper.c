@@ -135,6 +135,7 @@ void helper_ertn(CPULoongArchState *env)
     env->lladdr = 1;
     if (will_return_to_guest(env)) {
         env->guest = true;
+        env->CSR_GSTAT = FIELD_DP64(env->CSR_GSTAT, CSR_GSTAT, VM, 1);
         cpu_loongarch_set_guest_timer(env_archcpu(env), true);
         bql_lock();
         if (loongarch_guest_has_interrupt(env)) {

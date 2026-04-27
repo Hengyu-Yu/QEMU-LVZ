@@ -182,7 +182,7 @@ static const CSRInfo csr_info[] = {
     CSR_OFF(DBG),
     CSR_OFF(DERA),
     CSR_OFF(DSAVE),
-    CSR_OFF(GTLBC),
+    CSR_OFF_FUNCS(GTLBC, CSRFL_EXITTB, NULL, gen_helper_csrwr_gtlbc),
     CSR_OFF(TRGP),
     CSR_OFF_FUNCS(GSTAT, 0, NULL, gen_helper_csrwr_gstat),
     CSR_OFF(GCFG),

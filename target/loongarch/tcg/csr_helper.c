@@ -84,7 +84,7 @@ target_ulong helper_csrwr_estat(CPULoongArchState *env, target_ulong val)
 
 target_ulong helper_gcsrwr_estat(CPULoongArchState *env, target_ulong val)
 {
-    int64_t old_v = env->CSR_ESTAT;
+    int64_t old_v = env->GCSR_ESTAT;
     env->GCSR_ESTAT = deposit64(env->GCSR_ESTAT, 0, 2, val);
     if (!env->guest) {
         env->GCSR_ESTAT = deposit64(env->GCSR_ESTAT, 2, 11, extract64(val, 2, 11));
@@ -171,9 +171,30 @@ target_ulong helper_gcsrwr_ticlr(CPULoongArchState *env, target_ulong val)
 target_ulong helper_csrwr_gstat(CPULoongArchState *env, target_ulong val)
 {
     int64_t old_v = env->CSR_GSTAT;
+    uint8_t old_gid = FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, GID);
 
-    env->CSR_GSTAT = FIELD_DP64(env->CSR_GSTAT, CSR_GSTAT, PGM, FIELD_EX64(val, CSR_GSTAT, PGM));
+    env->CSR_GSTAT = FIELD_DP64(env->CSR_GSTAT, CSR_GSTAT, PVM, FIELD_EX64(val, CSR_GSTAT, PVM));
     env->CSR_GSTAT = FIELD_DP64(env->CSR_GSTAT, CSR_GSTAT, GID, FIELD_EX64(val, CSR_GSTAT, GID));
+
+    if (old_gid != FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, GID)) {
+        tlb_flush(env_cpu(env));
+    }
+
+    return old_v;
+}
+
+target_ulong helper_csrwr_gtlbc(CPULoongArchState *env, target_ulong val)
+{
+    int64_t old_v = env->CSR_GTLBC;
+    uint8_t old_use_tgid = FIELD_EX64(old_v, CSR_GTLBC, USETGID);
+    uint8_t old_tgid = FIELD_EX64(old_v, CSR_GTLBC, TGID);
+
+    env->CSR_GTLBC = val;
+
+    if (old_use_tgid != FIELD_EX64(env->CSR_GTLBC, CSR_GTLBC, USETGID) ||
+        old_tgid != FIELD_EX64(env->CSR_GTLBC, CSR_GTLBC, TGID)) {
+        tlb_flush(env_cpu(env));
+    }
 
     return old_v;
 }

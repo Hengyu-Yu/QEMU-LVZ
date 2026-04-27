@@ -117,11 +117,14 @@ static vaddr loongarch_cpu_get_pc(CPUState *cs)
 
 void trigger_vm_exit(CPULoongArchState *env)
 {
-    qemu_log("VM_EXIT pc=%016lx gstat=%016lx crmd=%016lx\n",
+    qemu_log("VM_EXIT pc=%016lx gstat=%016lx vm=%d pvm=%d "
+             "crmd=%016lx gcrmd=%016lx\n",
              env->pc, env->CSR_GSTAT,
-             FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, PGM));
+             (int)FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, VM),
+             (int)FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, PVM),
+             env->CSR_CRMD, env->GCSR_CRMD);
     cpu_loongarch_set_guest_timer(env_archcpu(env), false);
-    env->CSR_GSTAT = FIELD_DP64(env->CSR_GSTAT, CSR_GSTAT, PGM, 1);
+    env->CSR_GSTAT = FIELD_DP64(env->CSR_GSTAT, CSR_GSTAT, PVM, 1);
     env->vm_exit = 1;
 }
 
@@ -371,6 +374,7 @@ static void loongarch_cpu_do_interrupt(CPUState *cs)
     }
     cs->exception_index = -1;
     if (env->vm_exit) {
+        env->CSR_GSTAT = FIELD_DP64(env->CSR_GSTAT, CSR_GSTAT, VM, 0);
         env->guest = 0;
         cpu_reset_interrupt(cs, CPU_INTERRUPT_GUEST);
     }
