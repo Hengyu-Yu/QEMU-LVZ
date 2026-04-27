@@ -21,7 +21,6 @@ GTAGS
 *.patch
 *.gcov
 *.DS_Store
-*.md
 *.pdf
 build.sh
 rootfs.img
