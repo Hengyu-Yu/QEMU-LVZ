@@ -2,25 +2,14 @@
 
 本项目主要为LoongArch64架构的QEMU TCG虚拟机提供虚拟化扩展（LVZ）支持。目前已基本实现所有指令、CSR及架构支持，处于bug修复阶段。
 
-## 当前问题
-
-目前在TCG虚拟机中运行KVM虚拟机，存在相当大的内存问题，具体表现为系统随机触发page fault、stack smashing detected等错误。已经发现的特征如下：
-
-- 在设置外侧TCG虚拟机的smp=1后，错误概率增加，可能刚启动内侧KVM虚拟机，便会在每一次定时器中断中触发一次内存错误，直至内核崩溃。
-- 通过与串口输出日志、QEMU日志的比对，发现可能存在GVA映射到不同的GPA的现象，且输出的串口内容可能会被写入到Guest页表中。
-- 对所有的invtlb指令采用清除所有（包括Host与Guest）TLB项，将tlbwr与tlbfill所使用的invalidate\_tlb函数改为直接tlb\_flush，均无法解决问题。
-- 在ertn指令执行后清空Guest TLB，能显著降低内存错误触发几率，但无法完全解决，且暂时并不认为这是正确的修复方法。
-
-## 编译与测试
+## 编译
 
 在项目根目录依次执行：
 
 - ./configure --target-list=loongarch64-softmmu --disable-doc
 - make -j
 
-测试需要进行手工操作：进入lvz目录，执行./qemu.img进入外侧TCG虚拟机，再在其中启动KVM虚拟机，尝试一些内存读写操作，验证稳定性。测试结束后，手动将串口输出保存在lvz/kvm-log.txt，与lvz/qemu-log.txt配合分析。
-
-## 当前设计
+## 设计
 
 ### CPU虚拟化
 
@@ -28,7 +17,7 @@
 
 ### 内存虚拟化
 
-LoongArch继承了MIPS软件处理页表的设计，硬件通过TLB完成访存。GVA->HPA的完整地址转换模式如下：
+LoongArch继承了MIPS软件处理页表的设计，硬件通过TLB完成访存。GVA-\>HPA的完整地址转换模式如下：
 
 1. 在Guest TLB中查找GVA-\>GPA的映射。若未找到，直接在Guest触发例外，不退回Host。
 2. 找到Guest TLB后，在Host TLB中查找GPA-\>HPA的映射。若未找到，退回Host并触发TLB重填例外。

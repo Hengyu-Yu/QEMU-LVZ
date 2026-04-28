@@ -117,12 +117,6 @@ static vaddr loongarch_cpu_get_pc(CPUState *cs)
 
 void trigger_vm_exit(CPULoongArchState *env)
 {
-    qemu_log("VM_EXIT pc=%016lx gstat=%016lx vm=%d pvm=%d "
-             "crmd=%016lx gcrmd=%016lx\n",
-             env->pc, env->CSR_GSTAT,
-             (int)FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, VM),
-             (int)FIELD_EX64(env->CSR_GSTAT, CSR_GSTAT, PVM),
-             env->CSR_CRMD, env->GCSR_CRMD);
     cpu_loongarch_set_guest_timer(env_archcpu(env), false);
     env->CSR_GSTAT = FIELD_DP64(env->CSR_GSTAT, CSR_GSTAT, PVM, 1);
     env->vm_exit = 1;
@@ -294,8 +288,6 @@ static void loongarch_cpu_do_interrupt(CPUState *cs)
         cause = cs->exception_index;
         break;
     default:
-        qemu_log("Error: exception(%d) has not been supported\n",
-                 cs->exception_index);
         abort();
     }
 

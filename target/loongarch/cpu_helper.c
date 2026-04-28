@@ -124,8 +124,6 @@ bool loongarch_tlb_search(CPULoongArchState *env, target_ulong vaddr,
                 (vpn == (tlb_vppn >> compare_shift)) &&
                 (tlb_gid == gid)) {
                 *index = i * 256 + stlb_idx;
-                if (guest)
-                    qemu_log("Found tlb index=%d tlb_misc=%016lx tlb_entry0=%016lx tlb_entry1=%016lx gid=%d asid=%d  stlbps=%d\n", *index, tlb->tlb_misc, tlb->tlb_entry0, tlb->tlb_entry1, gid, csr_asid, stlb_ps);
                 return true;
             }
         }
@@ -151,8 +149,6 @@ bool loongarch_tlb_search(CPULoongArchState *env, target_ulong vaddr,
                 (vpn == (tlb_vppn >> compare_shift)) &&
                 (tlb_gid == gid)) {
                 *index = i;
-                if (guest)
-                    qemu_log("Found tlb index=%d tlb_misc=%016lx tlb_entry0=%016lx tlb_entry1=%016lx gid=%d asid=%d\n", *index, tlb->tlb_misc, tlb->tlb_entry0, tlb->tlb_entry1, gid, csr_asid);
                 return true;
             }
         }
@@ -170,21 +166,9 @@ int loongarch_map_host_address(CPULoongArchState *env, hwaddr *physical,
     if (match) {
         int ret = loongarch_map_tlb_entry(env, physical, prot,
                                            gpa, access_type, index, MMU_KERNEL_IDX, false);
-        if (ret == TLBRET_MATCH) {
-            qemu_log("GPA->HPA: %016lx %016lx tgid=%d guest=%d\n",
-                     gpa, *physical, get_tgid(env), env->guest);
-        } else {
-            qemu_log("HOST_TLB_HIT_INV gpa=%016lx ret=%d tgid=%d guest=%d idx=%d"
-                     " e0=%016lx e1=%016lx misc=%016lx\n",
-                     gpa, TLBRET_HOST_MATCH + ret, get_tgid(env), env->guest, index,
-                     env->tlb[index].tlb_entry0, env->tlb[index].tlb_entry1,
-                     env->tlb[index].tlb_misc);
-        }
         return TLBRET_HOST_MATCH + ret;
     }
 
-    qemu_log("HOST_TLB_MISS gpa=%016lx tgid=%d guest=%d\n",
-             gpa, get_tgid(env), env->guest);
     return TLBRET_HOST_NOMATCH;
 }
 
@@ -194,18 +178,10 @@ static int loongarch_map_address(CPULoongArchState *env, hwaddr *physical,
 {
     int index, match;
 
-    if (env->guest) {
-        qemu_log("Searching for GVA %016lx, access type=%d, mmu_idx=%d\n", address, access_type, mmu_idx);
-    }
-
     match = loongarch_tlb_search(env, address, &index, env->guest, get_tgid(env));
     if (match) {
         int ret = loongarch_map_tlb_entry(env, physical, prot,
                                         address, access_type, index, mmu_idx, env->guest);
-        if (env->guest && ret == TLBRET_MATCH) {
-            qemu_log("GVA->GPA: %016lx %016lx tgid=%d\n",
-                     address, *physical, get_tgid(env));
-        }
         return ret;
     }
 
