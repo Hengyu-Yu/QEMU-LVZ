@@ -672,6 +672,7 @@ static void loongarch_cpu_reset_hold(Object *obj, ResetType type)
     env->CSR_GCNTC = 0;
     env->CSR_GTLBC = 0;
     env->CSR_TRGP = 0;
+    env->GCSR_ASID = FIELD_DP64(0, CSR_ASID, ASIDBITS, 0xa);
 
     env->gtlb = &env->tlb[LOONGARCH_TLB_MAX];
     env->guest = false;
