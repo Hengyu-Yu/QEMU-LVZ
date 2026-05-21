@@ -925,7 +925,10 @@ target_ulong helper_lddir(CPULoongArchState *env, target_ulong base,
     }
 
     badvaddr = GET_CSR_IF(env->guest, TLBRBADV);
-    base = base & TARGET_PHYS_MASK;
+    /* Extract only the PPN field (bits 12-47) from the directory entry.
+     * Flag bits (V, D, PLV, MAT, etc.) at positions 0-11 must not
+     * participate in the next-level address calculation. */
+    base = (target_ulong)FIELD_EX64(base, TLBENTRY_64, PPN) << TARGET_PAGE_BITS;
 
     /* 0:64bit, 1:128bit, 2:192bit, 3:256bit */
     shift = FIELD_EX64(GET_CSR_IF(env->guest, PWCL), CSR_PWCL, PTEWIDTH);
@@ -998,6 +1001,8 @@ void helper_ldpte(CPULoongArchState *env, target_ulong base, target_ulong odd,
         ptoffset0 = ptindex << shift;
         ptoffset1 = (ptindex + 1) << shift;
 
+        /* Strip flag bits (0-11) from base before address calculation. */
+        base = (target_ulong)FIELD_EX64(base, TLBENTRY_64, PPN) << TARGET_PAGE_BITS;
         phys = base | (odd ? ptoffset1 : ptoffset0);
         if (env->guest) {
             tmp0 = ldq_phys(cs->as, loongarch_get_host_address(env, phys)) & TARGET_PHYS_MASK;
