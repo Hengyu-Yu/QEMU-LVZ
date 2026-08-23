@@ -812,7 +812,7 @@ static bool trans_gcsrxchg(DisasContext *ctx, arg_gcsrxchg *a)
 
     if ((csr->flags & CSRFL_GSPR)) {
         tcg_gen_movi_tl(oldv, 0);
-    } if (csr->writefn) {
+    } else if (csr->writefn) {
         csr->writefn(oldv, tcg_env, newv);
     } else {
         tcg_gen_st_tl(newv, tcg_env, csr->offset);
